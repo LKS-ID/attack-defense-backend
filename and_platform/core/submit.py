@@ -28,6 +28,9 @@ def submit_flag(team_id: int, flag: str, chall_id: int | None = None):
        db.session.add(new_submission)
        return {"flag": flag, "verdict": "flag is wrong or expired."}
     
+    if (flag_found.team_id == team_id):
+       return {"flag": flag, "verdict": "not allowed to submit your own flag."}
+
     prev_correct_submission = Submissions.query.filter(
         Submissions.flag_id == flag_found.id,
         Submissions.team_id == team_id,

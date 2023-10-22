@@ -35,163 +35,72 @@ def calculate_score_tick(round: int, tick: int):
     ScorePerTicks.query.filter(
         ScorePerTicks.round == round, ScorePerTicks.tick == tick
     ).delete()
-
-    current_leaderboard = get_leaderboard()
-    data_accum: dict[ChallID, dict[TeamID, TeamData]] = {}
-
-    correct_submissions = (
-        db.session.query(
-            Submissions.id,
-            Submissions.team_id,
-            Submissions.challenge_id,
-            Flags.team_id,
-        )
-        .join(Flags, Flags.id == Submissions.flag_id)
-        .filter(
-            Submissions.round == round,
-            Submissions.tick == tick,
-            Submissions.verdict == True,
-        )
-        .all()
-    )
-
-    for row in correct_submissions:
-        _, attacker, chall_id, defender = row
-        tmp = data_accum.get(chall_id, {})
-
-        atc_tmp = tmp.get(
-            attacker,
-            {"captured": [], "stolen": 0, "sla": {}},
-        )
-        atc_tmp["captured"].append(defender)
-
-        def_tmp = tmp.get(
-            defender,
-            {"captured": [], "stolen": 0, "sla": {}},
-        )
-        def_tmp["stolen"] = def_tmp["stolen"] + 1
-
-        tmp[attacker] = atc_tmp
-        tmp[defender] = def_tmp
-
-        data_accum[chall_id] = tmp
-
-    checker_results = (
-        db.session.query(CheckerQueues)
-        .filter(
-            CheckerQueues.round == round,
-            CheckerQueues.tick == tick,
-        )
-        .all()
-    )
-
-    team_slas: dict[TeamID, dict[ChallID, SLAData]] = {}
-    for checker_result in checker_results:
-        team_id = checker_result.team_id
-        chall_id = checker_result.challenge_id
-        verdict = checker_result.result
-
-        team_tmp = team_slas.get(team_id, {})
-        current_chall_data = team_tmp.get(
-            chall_id,
-            {"valid": 0, "faulty": 0},
-        )
-        if verdict == CheckerVerdict.VALID:
-            current_chall_data["valid"] += 1
-        elif verdict == CheckerVerdict.FAULTY:
-            current_chall_data["faulty"] += 1
-
-        team_tmp[chall_id] = current_chall_data
-        team_slas[team_id] = team_tmp
-
-    challs = db.session.query(Challenges.id).all()
-    teams: list[Teams] = Teams.query.all()
-    team_len = len(teams)
-    challs_len = len(challs)
-    scores = list()
-
-    for chall_row in challs:
-        chall = chall_row[0]
-        chall_data = data_accum.get(chall)
-
+    
+    teams = Teams.query.all()
+    challenges = Challenges.query.all()
+    for challenge in challenges:
         for team in teams:
-            team_sla = team_slas.get(
-                team.id,
-                {
-                    cid[0]: {
-                        "faulty": 0,
-                        "valid": 0,
-                    }
-                    for cid in challs
-                },
+            num_user_flag_captured = db.session.query(Submissions.id).join(Flags, Flags.id == Submissions.flag_id).filter(
+                Submissions.team_id == team.id,
+                Submissions.challenge_id == challenge.id,
+                Submissions.tick == tick,
+                Submissions.round == round,
+                Flags.subid == 1,
+            ).count()
+            num_root_flag_captured = db.session.query(Submissions.id).join(Flags, Flags.id == Submissions.flag_id).filter(
+                Submissions.team_id == team.id,
+                Submissions.challenge_id == challenge.id,
+                Submissions.tick == tick,
+                Submissions.round == round,
+                Flags.subid == 2,
+            ).count()
+
+            num_stolen = db.session.query(Submissions.id).join(Flags, Flags.id == Submissions.flag_id).filter(
+                Submissions.challenge_id == challenge.id,
+                Submissions.team_id != team.id,
+                Submissions.tick == tick,
+                Submissions.round == round,
+                Flags.team_id == team.id,
+            ).count()
+
+            num_faulty = db.session.query(
+                CheckerQueues.id
+            ).filter(
+                CheckerQueues.challenge_id == challenge.id,
+                CheckerQueues.team_id == team.id,
+                CheckerQueues.round == round,
+                CheckerQueues.tick == tick,
+                CheckerQueues.result == CheckerVerdict.FAULTY,
+            ).count()
+
+            num_valid = db.session.query(
+                CheckerQueues.id
+            ).filter(
+                CheckerQueues.challenge_id == challenge.id,
+                CheckerQueues.team_id == team.id,
+                CheckerQueues.round == round,
+                CheckerQueues.tick == tick,
+                CheckerQueues.result == CheckerVerdict.VALID,
+            ).count()
+
+            attack_score = num_root_flag_captured * 100 + num_user_flag_captured * 50
+            defense_score = num_faulty * (-50) + num_valid * 90
+            if num_stolen == 0:
+                defense_score += 100
+            sla = 1
+            if num_valid + num_faulty != 0:
+                sla = num_valid / (num_faulty + num_valid)
+
+            scoretick = ScorePerTicks(
+                round = round,
+                tick = tick,
+                challenge_id = challenge.id,
+                team_id = team.id,
+                attack_score = attack_score,
+                defense_score = defense_score,
+                sla = sla,
             )
-
-            attack_score = 0.0
-            current_pos = 1
-            for i, player in enumerate(current_leaderboard):
-                if player["team_id"] == team.id:
-                    current_pos = player["position"]
-                    break
-
-            if chall_data:
-                team_data = chall_data.get(team.id, {"captured": []})  # type: ignore
-                flag_captured = team_data.get("captured", [])
-                for captured in flag_captured:
-                    total_stolen = get_total_stolen(
-                        team_id=captured,
-                        challenge_id=chall,
-                        current_round=round,
-                        current_tick=tick,
-                    )
-                    current_score = math.sqrt(1 / max(total_stolen, 1))
-                    captured_pos = 1
-                    for i, player in enumerate(current_leaderboard):
-                        if player["team_id"] == captured:
-                            captured_pos = player["position"]
-                            break
-
-                    if current_pos > captured_pos:
-                        current_score *= 1 + (current_pos - captured_pos) / (
-                            team_len - 1
-                        )
-
-                    attack_score += current_score
-
-            defense_score = 0.0
-            total_stolen = get_total_stolen(
-                team_id=team.id,
-                challenge_id=chall,
-                current_round=round,
-                current_tick=tick,
-            )
-
-            service_sla = team_sla.get(
-                chall,
-                {"faulty": 0, "valid": 0},
-            )
-            sla_score = 1.0
-            if service_sla["faulty"] + service_sla["valid"] > 0:
-                sla_score = service_sla["valid"] / (
-                    service_sla["faulty"] + service_sla["valid"]
-                )
-
-            total_not_owning = team_len - 1 - total_stolen
-            defense_score += math.sqrt(
-                (total_not_owning + challs_len * sla_score)
-                / (team_len - 1 + challs_len)
-            )
-
-            score = ScorePerTicks(
-                round=round,
-                tick=tick,
-                team_id=team.id,
-                challenge_id=chall,
-                attack_score=attack_score,
-                defense_score=defense_score,
-                sla=sla_score,
-            )
-            scores.append(score)
-            db.session.add(score)
+            db.session.add(scoretick)   
     db.session.commit()
 
 
@@ -297,7 +206,7 @@ def get_overall_team_challenge_score(
         challenge_id=challenge_id,
         flag_captured=all_flag_captured,
         flag_stolen=all_flag_stolen,
-        sla=scores[0] if scores and len(scores) == 3 else 0,
+        sla=scores[0] if scores and len(scores) == 3 else 1,
         attack=scores[1] if scores and len(scores) == 3 else 0,
         defense=scores[2] if scores and len(scores) == 3 else 0,
     )
@@ -311,22 +220,35 @@ def get_overall_team_score(team_id: int, before: datetime | None = None) -> Team
     )
     for chall in challs:
         tmp = get_overall_team_challenge_score(team_id, chall.id, before)
-        team_score["total_score"] += tmp["attack"] + tmp["defense"] + tmp["sla"]
+        team_score["total_score"] += tmp["attack"] + tmp["defense"]
         team_score["challenges"].append(tmp)
     return team_score
 
 
-def get_leaderboard():
+def get_leaderboard(before: datetime | None = None):
     teams = Teams.query.all()
     scoreboard: list[TeamScore] = []
     for team in teams:
-        team_score = get_overall_team_score(team.id)
+        team_score = get_overall_team_score(team.id, before)
+        tmp_chall = {}
+        for chall in team_score["challenges"]:
+            chall_id = chall["challenge_id"]
+            chall.pop("challenge_id")
+            tmp_chall[chall_id] = chall
+
+        team_score.pop("team_id")
+        team_score.update({
+            "id": team.id,
+            "name": team.name,
+            "challenges": tmp_chall
+        })
+
         scoreboard.append(team_score)
 
     scoreboard_sort = sorted(scoreboard, key=lambda x: x["total_score"], reverse=True)
-    scoreboard_sort[0]["position"] = 1
+    scoreboard_sort[0]["rank"] = 1
     for i in range(1, len(scoreboard_sort)):
-        scoreboard_sort[i]["position"] = scoreboard_sort[i - 1]["position"]
+        scoreboard_sort[i]["rank"] = scoreboard_sort[i - 1]["rank"]
         if scoreboard_sort[i]["total_score"] != scoreboard_sort[i - 1]["total_score"]:
-            scoreboard_sort[i]["position"] += 1
+            scoreboard_sort[i]["rank"] += 1
     return scoreboard_sort
