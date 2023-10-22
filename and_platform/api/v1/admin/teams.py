@@ -51,64 +51,12 @@ def create_team():
     )
     db.session.add(new_team)
 
-    server_mode = get_config("SERVER_MODE")
-    if server_mode == "sharing":
-        db.session.commit()
-        data = {
-            "id": new_team.id,
-            "name": new_team.name,
-            "secret": new_team.secret,
-        }
-        return (
-            jsonify(
-                status="success",
-                message="team registered",
-                data=data,
-            ),
-            200,
-        )
-
-    if "server_id" in req_body:
-        server_id = req_body["server_id"]
-        server: Optional[Servers] = Servers.query.filter_by(id=server_id).first()
-        if server is None:
-            return jsonify(status="failed", message="server cannot be found."), 400
-
-        new_team.server_id = server_id
-        new_team.server_host = server.host
-
-    elif "server" in req_body:
-        server_data = req_body["server"]
-        server = Servers(
-            host=server_data["host"],
-            sshport=server_data["sshport"],
-            username=server_data["username"],
-            auth_key=server_data["auth_key"],
-        )
-        db.session.add(server)
-        db.session.flush()
-
-        new_team.server_id = server.id
-        new_team.server_host = server.host
-    else:
-        return (
-            jsonify(
-                status="failed",
-                message="missing server details",
-            ),
-            400,
-        )
-
     db.session.commit()
     data = {
         "id": new_team.id,
         "name": new_team.name,
         "secret": new_team.secret,
-        "server": {"id": server.id, "host": server.host},
     }
-
-    clear_public_team()
-
     return (
         jsonify(
             status="success",
