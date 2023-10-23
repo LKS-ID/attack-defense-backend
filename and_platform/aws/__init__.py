@@ -143,5 +143,4 @@ def rollback(team_id):
 
     print('Rollback instance for %s' % stack_name)
     delete_stack(stack_name)
-    outputs = deploy_stack(stack_name, modified, parameters)
-    print(outputs)
+    return deploy_stack(stack_name, modified, parameters)

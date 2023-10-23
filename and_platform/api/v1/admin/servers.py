@@ -32,6 +32,22 @@ def provision_all_servers():
     do_server_provision.apply_async(queue='contest')
     return jsonify(status="success", message="provisioning server is on progress"), 200
 
+@servers_blueprint.post("/<int:team_id>/rollback")
+def admin_server_rollback(team_id):
+    from and_platform.core.server import do_rollback
+    
+    team = Teams.query.filter_by(id=team_id).first()
+    if team is None:
+        return jsonify(status="not found", message="team not found"), 404
+    
+    confirm_data: dict = request.get_json()
+    if not confirm_data.get("confirm"):
+        return jsonify(status="bad request", message="action not confirmed"), 400
+    
+    do_rollback.apply_async(args=(team_id, ), queue='contest')
+    return jsonify(status="success", message="rollback request submitted.")
+  
+
 @servers_blueprint.get("/<int:team_id>/status")
 def admin_server_getstatus(team_id):
     team = Teams.query.filter_by(id=team_id).first()

@@ -1,5 +1,5 @@
 import celery
-from and_platform.aws import GLOBAL_TEMPLATE_PARAMETERS, TEAM_TEMPLATE_PARAMETERS, AWS_STACK_PREFIX, deploy_stack, get_stack_name, create_key_pair
+from and_platform.aws import GLOBAL_TEMPLATE_PARAMETERS, TEAM_TEMPLATE_PARAMETERS, AWS_STACK_PREFIX, deploy_stack, get_stack_name, create_key_pair, rollback
 from and_platform.core.config import get_app_config, get_config
 import os
 from and_platform.models import db, Teams, Servers, ServerAWSInfos
@@ -86,4 +86,20 @@ def do_server_provision():
 
 @celery.shared_task
 def do_rollback(team_id):
-    pass
+    output_stack_team = rollback(team_id)
+    
+    result_stack = {}
+    for output in output_stack_team:
+        result_stack[output['OutputKey']] = output['OutputValue']
+    
+    awsinfo = db.session.query(ServerAWSInfos).join(
+        Teams,
+        Teams.server_id == ServerAWSInfos.server_id
+    ).filter(
+        Teams.id == team_id
+    ).scalar()
+
+    awsinfo.instance_id = result_stack["CTFMachineInstanceId"]
+    print("New instance id " + result_stack["CTFMachineInstanceId"])
+    db.session.flush([awsinfo])
+    db.session.commit()
