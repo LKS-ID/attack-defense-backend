@@ -6,7 +6,7 @@ from and_platform.models import (
     Servers,
 )
 from and_platform.core.config import get_config
-from and_platform.core.service import get_remote_service_path, get_service_path
+# from and_platform.core.service import get_remote_service_path, get_service_path
 from and_platform.core.ssh import create_ssh_from_server
 from secrets import choice
 from string import ascii_lowercase, digits
@@ -50,25 +50,25 @@ def generate_flag(current_round: int, current_tick: int) -> List[Flags]:
     db.session.commit()
     return flags
 
-def rotate_flag(current_round: int, current_tick: int):
-    sql_query = db.session.query(Flags, Servers)
-    if get_config("SERVER_MODE") == "private":
-        sql_query = sql_query.join(Teams, Teams.id == Flags.team_id).join(Servers, Servers.id == Teams.server_id)
-    elif get_config("SERVER_MODE") == "sharing":
-        sql_query = sql_query.join(Challenges, Challenges.id == Flags.challenge_id).join(Servers, Servers.id == Challenges.server_id)
+# def rotate_flag(current_round: int, current_tick: int):
+#     sql_query = db.session.query(Flags, Servers)
+#     if get_config("SERVER_MODE") == "private":
+#         sql_query = sql_query.join(Teams, Teams.id == Flags.team_id).join(Servers, Servers.id == Teams.server_id)
+#     elif get_config("SERVER_MODE") == "sharing":
+#         sql_query = sql_query.join(Challenges, Challenges.id == Flags.challenge_id).join(Servers, Servers.id == Challenges.server_id)
     
-    rows = sql_query.filter(Flags.round == current_round, Flags.tick == current_tick).all()
-    for row in rows:
-        flag = row[0]
-        server = row[1]
+#     rows = sql_query.filter(Flags.round == current_round, Flags.tick == current_tick).all()
+#     for row in rows:
+#         flag = row[0]
+#         server = row[1]
         
-        local_path = os.path.join(get_service_path(flag.team_id, flag.challenge_id), "flag", "flag.txt")
-        remote_dir = os.path.join(get_remote_service_path(flag.team_id, flag.challenge_id), "flag", "flag.txt")
+#         local_path = os.path.join(get_service_path(flag.team_id, flag.challenge_id), "flag", "flag.txt")
+#         remote_dir = os.path.join(get_remote_service_path(flag.team_id, flag.challenge_id), "flag", "flag.txt")
         
-        with open(local_path, "w") as flagfile_local:
-            flagfile_local.write(flag.value)
+#         with open(local_path, "w") as flagfile_local:
+#             flagfile_local.write(flag.value)
 
-        with create_ssh_from_server(server) as ssh_conn:
-            with ssh_conn.sftp() as sftp_conn:
-                with sftp_conn.file(remote_dir, "w") as flagfile_remote:
-                    flagfile_remote.write(flag.value.encode())
+#         with create_ssh_from_server(server) as ssh_conn:
+#             with ssh_conn.sftp() as sftp_conn:
+#                 with sftp_conn.file(remote_dir, "w") as flagfile_remote:
+#                     flagfile_remote.write(flag.value.encode())

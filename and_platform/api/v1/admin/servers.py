@@ -1,6 +1,5 @@
 from and_platform.models import db, Servers, Teams, Challenges, CheckerQueues, CheckerVerdict
 from and_platform.api.helper import convert_model_to_dict
-from and_platform.core.server import do_server_provision
 from flask import Blueprint, jsonify, request
 
 servers_blueprint = Blueprint("servers_manager", __name__, url_prefix="/servers")
@@ -24,6 +23,8 @@ def get_by_id(server_id):
 
 @servers_blueprint.post("/provision")
 def provision_all_servers():
+    from and_platform.core.server import do_server_provision
+
     req = request.get_json()
     provision_challs = req.get("challenges")
     provision_teams = req.get("teams")

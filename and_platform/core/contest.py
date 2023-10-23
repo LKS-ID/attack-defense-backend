@@ -8,7 +8,8 @@ from celery.schedules import BaseSchedule, schedule
 from and_platform.cache import cache
 from and_platform.core.config import get_config, set_config, check_contest_is_running, check_contest_is_started
 from and_platform.core.constant import CHECKER_INTERVAL
-from and_platform.core.flag import generate_flag, rotate_flag
+from and_platform.core.flag import generate_flag
+# from and_platform.core.flag import rotate_flag
 from and_platform.core.score import calculate_score_tick
 from and_platform.models import (
     db,
