@@ -23,5 +23,5 @@ def get_my_solves():
 def rollback_machine():
     from and_platform.core.server import do_rollback
 
-    do_rollback(current_team.server_id)
+    do_rollback.apply_async(args=(team_id, ), queue='contest')
     return jsonify(status="success",message="rollback request submitted.")
