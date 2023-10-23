@@ -154,7 +154,7 @@ def create_checker_executor():
 def create_contest_worker(flask_app: Flask):
     celery = create_celery(create_app())
     celery.conf.update(
-        include=["and_platform.core.contest", "and_platform.core.service"],
+        include=["and_platform.core.contest", "and_platform.core.service", "and_platform.core.server"],
         task_default_queue="contest",
     )
     return celery

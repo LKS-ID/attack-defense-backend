@@ -24,29 +24,12 @@ def get_by_id(server_id):
 @servers_blueprint.post("/provision")
 def provision_all_servers():
     from and_platform.core.server import do_server_provision
-
-    req = request.get_json()
-    provision_challs = req.get("challenges")
-    provision_teams = req.get("teams")
-    if not provision_challs or not provision_teams:
-        return jsonify(status="failed", message="invalid body."), 400
     
-    teams_query = Teams.query
-    challs_query = Challenges.query
-    if isinstance(provision_teams, list):
-        teams_query = teams_query.where(Teams.id.in_(provision_teams))
-    if isinstance(provision_challs, list):
-        challs_query = challs_query.where(Challenges.id.in_(provision_challs))
+    confirm_data: dict = request.get_json()
+    if not confirm_data.get("confirm"):
+        return jsonify(status="bad request", message="action not confirmed"), 400
     
-    teams = teams_query.all()
-    challenges = challs_query.all()
-    if (isinstance(provision_teams, list) and len(teams) != len(provision_teams)) \
-        or (isinstance(provision_challs, list) and len(challenges) != len(provision_challs)):
-        return jsonify(status="failed", message="challenge or team cannot be found."), 400
-    
-    for team in teams:
-        for chall in challenges:
-            do_server_provision(team.id, chall.id)
+    do_server_provision.apply_async(queue='contest')
     return jsonify(status="success", message="provisioning server is on progress"), 200
 
 @servers_blueprint.get("/<int:team_id>/status")

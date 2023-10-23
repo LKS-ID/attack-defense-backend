@@ -2,7 +2,7 @@ from and_platform.core.config import get_config
 from and_platform.core.constant import CHECKER_TIMEOUT
 from and_platform.core.ssh import create_ssh_from_server
 # from and_platform.core.service import get_remote_service_path
-# from and_platform.core.service import get_challenges_dir_fromid
+from and_platform.core.challenge import get_challenges_dir_fromid
 from and_platform.models import db, Teams, CheckerQueues, CheckerVerdict, ServerAWSInfos
 # from and_platform.models import Services
 from flask import Flask
@@ -42,7 +42,7 @@ class CheckerExecutor():
                 # ).order_by(Services.order).all()
                 # addresses = [elm[0] for elm in addresses]
                 
-                ssh_conn = create_ssh_from_server(server)
+                # ssh_conn = create_ssh_from_server(server)
                 chall_dir = get_challenges_dir_fromid(str(chall_id))
                 script_path = chall_dir.joinpath("test", "test.py").as_posix()
 
@@ -51,7 +51,7 @@ class CheckerExecutor():
                     secret=team.secret,
                     local_challenge_dir=chall_dir,
                     # remote_challenge_dir=get_remote_service_path(team.id, chall_id),
-                    ssh_conn=ssh_conn
+                    # ssh_conn=ssh_conn
                 )
                 
                 test_script = SourceFileLoader("checker_test", script_path).load_module()
