@@ -51,6 +51,15 @@ class Servers(db.Model):
                         .filter(Teams.id == team_id).first()
         return query_res[1]
 
+class ServerAWSInfos(db.Model):
+    __tablename__ = "server_aws_infos"
+
+    id = db.Column(db.Integer, primary_key=True)
+    server_id = db.Column(db.Integer, db.ForeignKey("servers.id"))
+    server = db.relationship("Servers", foreign_keys="ServerAWSInfos.server_id", lazy=True)
+    instance_id = db.Column(db.String, unique=True)
+
+
 class Teams(db.Model):
     __tablename__ = "teams"
 
@@ -155,28 +164,29 @@ class ScorePerTicks(db.Model):
 
     team = db.relationship("Teams", foreign_keys="ScorePerTicks.team_id", lazy="joined")
 
-class Services(db.Model):
-    __tablename__ = "services"
-    __table_args__ = (
-        db.UniqueConstraint("team_id", "challenge_id", "order"),
-        db.Index("service_idx", "team_id", "challenge_id"),
-    )
+# class Services(db.Model):
+#     __tablename__ = "services"
+#     __table_args__ = (
+#         db.UniqueConstraint("team_id", "challenge_id", "order"),
+#         db.Index("service_idx", "team_id", "challenge_id"),
+#     )
 
-    id = db.Column(db.Integer, primary_key=True)
-    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"))
-    challenge_id = db.Column(db.Integer, db.ForeignKey("challenges.id"))
-    order = db.Column(db.Integer)
-    address = db.Column(db.String(100), unique=True)
+#     id = db.Column(db.Integer, primary_key=True)
+#     team_id = db.Column(db.Integer, db.ForeignKey("teams.id"))
+#     challenge_id = db.Column(db.Integer, db.ForeignKey("challenges.id"))
+#     order = db.Column(db.Integer)
+#     address = db.Column(db.String(100), unique=True)
 
-    @classmethod
-    def is_teamservice_exist(cls, team_id, challenge_id):
-        return cls.query.where(cls.team_id == team_id, cls.challenge_id == challenge_id).count() > 0
+#     @classmethod
+#     def is_teamservice_exist(cls, team_id, challenge_id):
+#         return cls.query.where(cls.team_id == team_id, cls.challenge_id == challenge_id).count() > 0
 
 class CheckerVerdict(enum.IntEnum, enum.Enum):
     QUEUE = -1
     PROCESS = 99
     FAULTY = 0
     VALID = 1
+    FLAG_MISSING = 2
 
 class CheckerQueues(db.Model):
     __tablename__ = "checker_queues"

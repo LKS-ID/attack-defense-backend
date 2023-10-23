@@ -1,9 +1,10 @@
 from and_platform.core.config import get_config
 from and_platform.core.constant import CHECKER_TIMEOUT
 from and_platform.core.ssh import create_ssh_from_server
-from and_platform.core.service import get_remote_service_path
-from and_platform.core.service import get_challenges_dir_fromid
-from and_platform.models import db, Challenges, Teams, Services, CheckerQueues, CheckerVerdict
+# from and_platform.core.service import get_remote_service_path
+# from and_platform.core.service import get_challenges_dir_fromid
+from and_platform.models import db, Teams, CheckerQueues, CheckerVerdict, ServerAWSInfos
+# from and_platform.models import Services
 from flask import Flask
 from fulgens import ChallengeHelper, Verdict
 from importlib.machinery import SourceFileLoader
@@ -19,20 +20,28 @@ class CheckerExecutor():
         with self.app.app_context():
             try:
                 team = Teams.query.filter(Teams.id == team_id).scalar()
-                chall = Challenges.query.filter(Challenges.id == chall_id).scalar()
-    
-                server_mode = get_config("SERVER_MODE")
-                if server_mode == "private":
-                    server = team.server
-                else:
-                    server = chall.server
+                # chall = Challenges.query.filter(Challenges.id == chall_id).scalar()
                 
-                addresses = db.session.query(Services.address).filter(
-                    Services.challenge_id == chall_id,
-                    Services.team_id == team.id
-                ).order_by(Services.order).all()
-                addresses = [elm[0] for elm in addresses]
-
+                server = team.server
+                awsinfo = db.session.query(ServerAWSInfos.instance_id).filter(
+                    ServerAWSInfos.server_id == server.id
+                ).scalar()
+                addresses = [
+                    server.host,
+                    awsinfo.instance_id
+                ]
+                # server_mode = get_config("SERVER_MODE")
+                # if server_mode == "private":
+                #     server = team.server
+                # else:
+                #     server = chall.server
+                
+                # addresses = db.session.query(Services.address).filter(
+                #     Services.challenge_id == chall_id,
+                #     Services.team_id == team.id
+                # ).order_by(Services.order).all()
+                # addresses = [elm[0] for elm in addresses]
+                
                 ssh_conn = create_ssh_from_server(server)
                 chall_dir = get_challenges_dir_fromid(str(chall_id))
                 script_path = chall_dir.joinpath("test", "test.py").as_posix()
@@ -41,7 +50,7 @@ class CheckerExecutor():
                     addresses=addresses,
                     secret=team.secret,
                     local_challenge_dir=chall_dir,
-                    remote_challenge_dir=get_remote_service_path(team.id, chall_id),
+                    # remote_challenge_dir=get_remote_service_path(team.id, chall_id),
                     ssh_conn=ssh_conn
                 )
                 

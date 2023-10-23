@@ -1,12 +1,13 @@
 from flask import Blueprint, jsonify
-from and_platform.api.v1.my.service import myservice_blueprint
+# from and_platform.api.v1.my.service import myservice_blueprint
+from and_platform.core.server import do_rollback
 from and_platform.core.config import get_config
 from and_platform.core.security import validteam_only, current_team
 from and_platform.models import ChallengeReleases, Solves
 
 myapi_blueprint = Blueprint("myapi", __name__, url_prefix="/my")
 myapi_blueprint.before_request(validteam_only)
-myapi_blueprint.register_blueprint(myservice_blueprint)
+# myapi_blueprint.register_blueprint(myservice_blueprint)
 
 @myapi_blueprint.get("/solves")
 def get_my_solves():
@@ -18,3 +19,8 @@ def get_my_solves():
     solves = [elm[0] for elm in solves]
 
     return jsonify(status="success",data=solves)
+
+@myapi_blueprint.get("/rollback")
+def rollback_machine():
+    do_rollback(current_team.server_id)
+    return jsonify(status="success",message="rollback request submitted.")

@@ -32,6 +32,7 @@ markdown = "^3.4.4"
 flask-socketio = "^5.3.6"
 gevent-websocket = "^0.10.1"
 py-gfm = "^2.0.0"
+boto = "^2.49.0"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.4.1"

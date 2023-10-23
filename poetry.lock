@@ -128,6 +128,17 @@ files = [
 ]
 
 [[package]]
+name = "boto"
+version = "2.49.0"
+description = "Amazon Web Services Library"
+optional = false
+python-versions = "*"
+files = [
+    {file = "boto-2.49.0-py2.py3-none-any.whl", hash = "sha256:147758d41ae7240dc989f0039f27da8ca0d53734be0eb869ef16e3adcfa462e8"},
+    {file = "boto-2.49.0.tar.gz", hash = "sha256:ea0d3b40a2d852767be77ca343b58a9e3a4b00d9db440efb8da74b4e58025e5a"},
+]
+
+[[package]]
 name = "cachelib"
 version = "0.9.0"
 description = "A collection of cache libraries in the same API interface."
@@ -1874,4 +1885,4 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "53ba81e7e0feae2390db39cb289e0b0c18cde4beb77aec07a4c1bb397e10361d"
+content-hash = "88ef851614fbb48a7d7e5ad122975323d7bd9245b9ffa07b41b062f25f44fdf4"
