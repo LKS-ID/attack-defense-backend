@@ -202,11 +202,32 @@ def get_overall_team_challenge_score(
         .first()
     )
 
+    checker_filter = [
+        CheckerQueues.team_id == team_id,
+        CheckerQueues.challenge_id == challenge_id,
+        CheckerQueues.result.in_([CheckerVerdict.FAULTY, CheckerVerdict.VALID]),
+    ]
+    if before:
+        checker_filter.append(CheckerQueues.time_created < before)
+
+    checkers = (
+        db.session.query(
+            CheckerQueues.result,
+            func.count(CheckerQueues.id),
+        )
+        .filter(*checker_filter)
+        .group_by(CheckerQueues.result)
+        .all()
+    )
+    checker_accum = {0: 0, 1: 0}
+    for check in checkers:
+        checker_accum[check[0]] = check[1]
+    
     return TeamChallengeScore(
         challenge_id=challenge_id,
         flag_captured=all_flag_captured,
         flag_stolen=all_flag_stolen,
-        sla=scores[0] if scores and len(scores) == 3 else 1,
+        sla=f"{checker_accum[1]} / {checker_accum[1]+checker_accum[0]}",
         attack=scores[1] if scores and len(scores) == 3 else 0,
         defense=scores[2] if scores and len(scores) == 3 else 0,
     )

@@ -1,8 +1,9 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
+from and_platform.api.helper import convert_model_to_dict
 # from and_platform.api.v1.my.service import myservice_blueprint
 from and_platform.core.config import get_config
 from and_platform.core.security import validteam_only, current_team
-from and_platform.models import ChallengeReleases, Solves
+from and_platform.models import ChallengeReleases, Solves, Servers, Teams
 
 myapi_blueprint = Blueprint("myapi", __name__, url_prefix="/my")
 myapi_blueprint.before_request(validteam_only)
@@ -19,9 +20,18 @@ def get_my_solves():
 
     return jsonify(status="success",data=solves)
 
-@myapi_blueprint.get("/rollback")
+@myapi_blueprint.post("/rollback")
 def rollback_machine():
     from and_platform.core.server import do_rollback
-
-    do_rollback.apply_async(args=(team_id, ), queue='contest')
+    
+    confirm_data: dict = request.get_json()
+    if not confirm_data.get("confirm"):
+        return jsonify(status="bad request", message="action not confirmed"), 400
+    
+    do_rollback.apply_async(args=(current_team.id, ), queue='contest')
     return jsonify(status="success",message="rollback request submitted.")
+
+@myapi_blueprint.get("/manage")
+def manage_machine():
+    server = Servers.query.join(Teams, Teams.server_id == Servers.id).filter(Teams.id == current_team.id).scalar()
+    return jsonify(status="success",data=convert_model_to_dict(server))
