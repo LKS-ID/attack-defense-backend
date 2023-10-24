@@ -28,7 +28,7 @@ class CheckerExecutor():
                 ).scalar()
                 addresses = [
                     server.host,
-                    awsinfo.instance_id
+                    awsinfo
                 ]
                 # server_mode = get_config("SERVER_MODE")
                 # if server_mode == "private":
