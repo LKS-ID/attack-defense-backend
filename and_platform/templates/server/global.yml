@@ -25,6 +25,10 @@ Parameters:
     Type: String
     Default: vpcid
     Description: VPC Id
+  PublicRouteTable:
+    Type: String
+    Default: PublicRouteTable
+    Description: PublicRouteTable
   
 Resources:
   # API Gateway Establishment. 
@@ -406,30 +410,6 @@ Resources:
                 Resource: 'arn:aws:logs:*:*:*'
 
   # EC2 Networking Establishment
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: ManagedBy
-          Value: !Ref EnvironmentName
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref Vpc
-      InternetGatewayId: !Ref InternetGateway
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref Vpc
-      Tags:
-        - Key: ManagedBy
-          Value: !Ref EnvironmentName
-  PublicRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
   EC2Subnet:
     Type: AWS::EC2::Subnet
     Properties:

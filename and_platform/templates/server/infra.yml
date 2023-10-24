@@ -37,6 +37,35 @@ Resources:
       Tags:
         - Key: ManagedBy
           Value: !Ref EnvironmentName
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  EC2SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref EC2SubnetInfra
   EC2SecurityGroupInfra:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -82,7 +111,7 @@ Resources:
   PlatformEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t2.micro
+      InstanceType: c5.xlarge
       KeyName: !Ref CTFEC2KeyPair
       SecurityGroupIds:
         - !Ref EC2SecurityGroupInfra
@@ -94,6 +123,9 @@ Resources:
         - Key: ManagedBy 
           Value: !Ref EnvironmentName
 Outputs:
+  PublicRouteTable:
+    Description: PublicRouteTable
+    Value: !Ref PublicRouteTable
   Vpc:
     Description: Vpc
     Value: !Ref Vpc
