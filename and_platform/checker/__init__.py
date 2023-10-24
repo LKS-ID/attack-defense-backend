@@ -12,6 +12,10 @@ from multiprocessing import TimeoutError
 from multiprocessing.pool import ThreadPool
 import traceback
 
+class Helper():
+    def __init__(self, addresses):
+        self.addressess = addresses
+
 class CheckerExecutor():
     def __init__(self, app: Flask):
         self.app = app
@@ -46,12 +50,8 @@ class CheckerExecutor():
                 chall_dir = get_challenges_dir_fromid(str(chall_id))
                 script_path = chall_dir.joinpath("test", "test.py").as_posix()
 
-                helper = ChallengeHelper(
-                    addresses=addresses,
-                    secret=team.secret,
-                    local_challenge_dir=chall_dir,
-                    # remote_challenge_dir=get_remote_service_path(team.id, chall_id),
-                    # ssh_conn=ssh_conn
+                helper = Helper(
+                    addresses=addresses
                 )
                 
                 test_script = SourceFileLoader("checker_test", script_path).load_module()
