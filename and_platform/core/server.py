@@ -6,7 +6,7 @@ from and_platform.models import db, Teams, Servers, ServerAWSInfos
 
 def generate_team_private_ip(team_id):
     num = team_id + 100
-    return f"10.0.1.{num}"
+    return f"10.0.64.{num}"
 
 def generate_team_keypairname(team_id):
     return f"lks2023Team{team_id}"
