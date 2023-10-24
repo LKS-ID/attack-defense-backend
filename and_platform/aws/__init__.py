@@ -10,6 +10,7 @@ AWS_STACK_PREFIX = os.getenv('AWS_STACK_PREFIX', 'lks-warmup')
 
 GLOBAL_TEMPLATE_PARAMETERS = {
     'Vpc': os.getenv('VPC_ID', 'vpcid'),
+    'PublicRouteTable': os.getenv('PUBLIC_ROUTE_TABLE', 'routetable'),
     'EnvironmentName': AWS_STACK_PREFIX,
     'FlagServerHost': os.getenv('FLAG_SERVER_HOST', 'https://flaggy.free.beeceptor.com'),
 }
