@@ -119,9 +119,9 @@ def update_team(team_id):
         "name": team.name,
     }
 
-    if server_mode == "private":
-        server = Servers.query.filter_by(id=team.server_id).first()
-        data["server"] = {"id": server.id, "host": server.host}
+    # if server_mode == "private":
+    #     server = Servers.query.filter_by(id=team.server_id).first()
+    #     data["server"] = {"id": server.id, "host": server.host}
     
     clear_public_team()
 
