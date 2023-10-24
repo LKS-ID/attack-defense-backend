@@ -21,7 +21,11 @@ Parameters:
     Type: String
     Default: secret
     Description: GateFlagSecret
-
+  Vpc:
+    Type: String
+    Default: vpcid
+    Description: VPC Id
+  
 Resources:
   # API Gateway Establishment. 
   RestApi:
@@ -402,16 +406,6 @@ Resources:
                 Resource: 'arn:aws:logs:*:*:*'
 
   # EC2 Networking Establishment
-  Vpc:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      InstanceTenancy: default
-      Tags:
-        - Key: ManagedBy
-          Value: !Ref EnvironmentName
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -439,8 +433,8 @@ Resources:
   EC2Subnet:
     Type: AWS::EC2::Subnet
     Properties:
-      CidrBlock: 10.0.0.0/18
-      MapPublicIpOnLaunch: true
+      CidrBlock: 10.0.32.0/18
+      MapPublicIpOnLaunch: false
       VpcId: !Ref Vpc
       Tags:
         - Key: ManagedBy

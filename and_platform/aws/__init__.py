@@ -9,6 +9,7 @@ AWS_REGION_NAME = os.getenv('AWS_REGION_NAME', 'ap-southeast-1')
 AWS_STACK_PREFIX = os.getenv('AWS_STACK_PREFIX', 'lks-warmup')
 
 GLOBAL_TEMPLATE_PARAMETERS = {
+    'Vpc': os.getenv('VPC_ID', 'vpcid'),
     'EnvironmentName': AWS_STACK_PREFIX,
     'FlagServerHost': os.getenv('FLAG_SERVER_HOST', 'https://flaggy.free.beeceptor.com'),
 }

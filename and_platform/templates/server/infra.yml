@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AWS CloudFormation template for Infra config (gateway, networking, IAM, key rotator) deployment.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: LKS-AnD-Warmup
+    Description: A friendly environment name that will be used for namespacing all cluster resources.
+  CTFEC2KeyPair:
+    Type: String
+    Default: juri-lks
+    Description: The KeyPair configuration to connect to EC2 instances.
+  MachineAMI:
+    Type: String
+    Default: ami-078c1149d8ad719a7
+    Description: Machine AMI ID, default image is ubuntu 22.0.4
+  
+Resources:
+  # EC2 Networking Establishment
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+  EC2SubnetInfra:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.1.0/18
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+  EC2SecurityGroupInfra:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for Infra
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: udp
+          FromPort: 51820
+          ToPort: 51820
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+      Tags:
+        - Key: Name
+          Value: infra-secgroup
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+  # EC2 Instance for infra
+  VPNServerEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.small
+      KeyName: !Ref CTFEC2KeyPair
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroupInfra
+      SubnetId: !Ref EC2SubnetInfra
+      ImageId: !Ref MachineAMI
+      Tags:
+        - Key: Name
+          Value: vpn-server-and
+        - Key: ManagedBy 
+          Value: !Ref EnvironmentName
+  PlatformEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      KeyName: !Ref CTFEC2KeyPair
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroupInfra
+      SubnetId: !Ref EC2SubnetInfra
+      ImageId: !Ref MachineAMI
+      Tags:
+        - Key: Name
+          Value: platform-server-and
+        - Key: ManagedBy 
+          Value: !Ref EnvironmentName
+Outputs:
+  Vpc:
+    Description: Vpc
+    Value: !Ref Vpc
