@@ -419,10 +419,46 @@ Resources:
       Tags:
         - Key: ManagedBy
           Value: !Ref EnvironmentName
-  EC2SubnetRouteTableAssociation:
+  EC2PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.128.0/18
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+  EC2PublicSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref EC2PublicSubnet
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    Properties: 
+      Domain: vpc
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties: 
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref EC2PublicSubnet
+  EC2PrivateToPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+  EC2PrivateToPublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref EC2PrivateToPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref NATGateway
+  EC2SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref EC2PrivateToPublicRouteTable
       SubnetId: !Ref EC2Subnet
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
