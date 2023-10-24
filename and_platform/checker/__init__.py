@@ -14,7 +14,7 @@ import traceback
 
 class Helper():
     def __init__(self, addresses):
-        self.addressess = addresses
+        self.addresses = addresses
 
 class CheckerExecutor():
     def __init__(self, app: Flask):
