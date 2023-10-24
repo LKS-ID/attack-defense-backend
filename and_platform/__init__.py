@@ -98,11 +98,11 @@ def create_app():
         CORS(
             app,
             origins=[
-                "https://ctf.compfest.id",
                 "http://127.0.0.1:3000",
                 "http://localhost:3000",
                 "http://localhost",
-                "https://and-frontend.vercel.app",
+                "https://and.idcyberskills.com",
+                "https://mirror-and-frontend-4z190z51p-boncengs-projects.vercel.app",
             ],
         )
         
