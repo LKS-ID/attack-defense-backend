@@ -413,7 +413,7 @@ Resources:
   EC2Subnet:
     Type: AWS::EC2::Subnet
     Properties:
-      CidrBlock: 10.0.32.0/18
+      CidrBlock: 10.0.64.0/18
       MapPublicIpOnLaunch: false
       VpcId: !Ref Vpc
       Tags:
