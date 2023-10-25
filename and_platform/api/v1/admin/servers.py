@@ -49,6 +49,10 @@ def provision_all_servers():
 def provision_one_servers(team_id):
     from and_platform.core.server import do_server_provision
     
+    team = Teams.query.filter_by(id=team_id).first()
+    if team is None:
+        return jsonify(status="not found", message="team not found"), 404
+
     confirm_data: dict = request.get_json()
     if not confirm_data.get("confirm"):
         return jsonify(status="bad request", message="action not confirmed"), 400
@@ -60,6 +64,10 @@ def provision_one_servers(team_id):
 def destroy_server(team_id):
     from and_platform.core.server import do_server_destroy
     
+    team = Teams.query.filter_by(id=team_id).first()
+    if team is None:
+        return jsonify(status="not found", message="team not found"), 404
+        
     confirm_data: dict = request.get_json()
     if not confirm_data.get("confirm"):
         return jsonify(status="bad request", message="action not confirmed"), 400

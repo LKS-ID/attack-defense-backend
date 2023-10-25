@@ -466,14 +466,14 @@ Resources:
       GroupDescription: Security Group for Gateflag CTFBox 
       VpcId: !Ref Vpc
       SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
+        - CidrIp: 10.0.0.0/8
           IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
+          FromPort: 0
+          ToPort: 65535
+        - CidrIp: 10.0.0.0/8
+          IpProtocol: udp
+          FromPort: 0
+          ToPort: 65535
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
           FromPort: 22
