@@ -1,9 +1,11 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 from and_platform.api.helper import convert_model_to_dict
 # from and_platform.api.v1.my.service import myservice_blueprint
-from and_platform.core.config import get_config
+from and_platform.core.config import get_config, get_app_config
 from and_platform.core.security import validteam_only, current_team
 from and_platform.models import ChallengeReleases, Solves, Servers, Teams
+import os
+import zipfile
 
 myapi_blueprint = Blueprint("myapi", __name__, url_prefix="/my")
 myapi_blueprint.before_request(validteam_only)
@@ -35,3 +37,15 @@ def rollback_machine():
 def manage_machine():
     server = Servers.query.join(Teams, Teams.server_id == Servers.id).filter(Teams.id == current_team.id).scalar()
     return jsonify(status="success",data=convert_model_to_dict(server))
+
+@myapi_blueprint.get("/vpn")
+def get_vpn():
+    num_member = get_config("NUM_MEMBER", 2)
+    vpn_folder = os.path.join(get_app_config("DATA_DIR"), "vpn")
+    vpnzip_path = os.path.join(vpn_folder, "zip", f"team{current_team.id}.zip")
+    with zipfile.ZipFile(vpnzip_path, "w") as vpnzip:
+        start_idx = num_member * (current_team.id - 1) + 1
+        for i in range(start_idx, start_idx + num_member):
+            vpnfile = os.path.join(vpn_folder, f"user{i}.client.conf")
+            vpnzip.write(vpnfile)
+    send_file(vpnzip_path)

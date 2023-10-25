@@ -61,7 +61,7 @@ def init_data_dir(app):
             os.path.dirname(os.path.abspath(__file__)), ".adce_data"
         )
 
-    for d in ["challenges", "services"]:
+    for d in ["challenges", "services", "vpn", "vpn-zip"]:
         dirpath = os.path.join(app.config["DATA_DIR"], d)
         os.makedirs(dirpath, exist_ok=True)
 
