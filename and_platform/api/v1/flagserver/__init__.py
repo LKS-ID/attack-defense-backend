@@ -40,7 +40,7 @@ def get_flag_api_handler(subid):
     }
     data_resp = {
         "type": SUBID_TRANSFORM[subid],
-        "generated_at": "tick " + get_config("CURRENT_TICK", 0),
+        "generated_at": "tick " + str(get_config("CURRENT_TICK", 0)),
     }
 
     try:
