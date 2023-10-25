@@ -94,6 +94,7 @@ def create_new_chall():
     num_expose = data.get("num_expose")
     server_id = data.get("server_id")
     visibility = data.get("visibility")
+    num_flag = data.get("num_flag", 1)
 
     if not (name and description and num_expose and visibility) or (
         server_mode == "sharing" and not server_id
@@ -104,6 +105,7 @@ def create_new_chall():
         name=name,
         description=description,
         num_expose=num_expose,
+        num_flag=num_flag,
     )
 
     if server_mode == "sharing":
@@ -126,6 +128,7 @@ def create_new_chall():
             "num_expose": chall.num_expose,
             "server_id": server_id,
             "visibility": visibility,
+            "num_flag": num_flag,
         },
         chall.id,
     )
@@ -161,6 +164,7 @@ def update_chall(challenge_id: int):
     chall.name = data.get("name", chall.name)
     chall.description = data.get("description", chall.description)
     chall.num_expose = data.get("num_expose", chall.num_expose)
+    chall.num_flag = data.get("num_flag", chall.num_flag)
     server_id = data.get("server_id", chall.server_id)
     visibility = data.get("visibility")
 
