@@ -5,9 +5,18 @@ import os
 import json
 from and_platform.models import db, Teams, Servers, ServerAWSInfos
 
+def get_template_filename(prefix, team_id):
+    if team_id <= 8:
+        return prefix + ".1"
+    else:
+        return prefix + ".2"
+
 def generate_team_private_ip(team_id):
     num = team_id + 100
-    return f"10.0.64.{num}"
+    if team_id <= 8:
+        return f"10.0.0.{num}"
+    else:
+        return f"10.0.128.{num}"
 
 def generate_team_keypairname(team_id):
     return f"lks2023Team{team_id}"
@@ -17,14 +26,10 @@ def replace_template(content, team_id = 0):
     content = content.replace("__TEAM__", f'team{team_id}')
     return content
 
-def provision_or_get_global_stack(is_force=False):
-    CFG_NAME = "AWS_GLOBAL_STACK_OUTPUT"
-    stack_output = get_config(CFG_NAME)
-    if not is_force and stack_output:
-        return json.loads(stack_output)
+def provision_or_get_global_stack(is_force=False, fname="global.yml"):
     template_dir = os.path.join(get_app_config("TEMPLATE_DIR"), "server")
-    
-    with open(os.path.join(template_dir, "global.yml")) as f:
+
+    with open(os.path.join(template_dir, fname)) as f:
         stack_global_template = f.read()
         stack_global_template = replace_template(stack_global_template)
 
@@ -40,11 +45,11 @@ def provision_or_get_global_stack(is_force=False):
     output_stack_global_json = {}
     for output in output_stack_global:
         output_stack_global_json[output['OutputKey']] = output['OutputValue']
-    set_config(CFG_NAME, json.dumps(output_stack_global_json))
     return output_stack_global_json
 
 def do_server_bulk_provision(is_force):
-    provision_or_get_global_stack(is_force)
+    for i in range(1, 3):
+        provision_or_get_global_stack(is_force, "global.yml." + str(i))
     teams = Teams.query.all()
     for team in teams:
         do_server_bulk_provision.apply_async(team.id)
@@ -53,7 +58,7 @@ def do_server_bulk_provision(is_force):
 def do_server_provision(team_id):
     template_dir = os.path.join(get_app_config("TEMPLATE_DIR"), "server")
     
-    output_stack_global = provision_or_get_global_stack()
+    output_stack_global = provision_or_get_global_stack(fname=get_template_filename("global.yml", team_id))
 
     team_parameters = TEAM_TEMPLATE_PARAMETERS
     team_parameters.update(output_stack_global)
@@ -63,7 +68,7 @@ def do_server_provision(team_id):
     team_parameters['PrivateIpAddress'] = generate_team_private_ip(team_id)
 
     ssh_privkey = create_key_pair(team_keypairname)
-    with open(os.path.join(template_dir, "team.yml")) as f:
+    with open(os.path.join(template_dir, get_template_filename("team.yml", team_id))) as f:
         stack_team_template = f.read()
         stack_team_template = replace_template(stack_team_template, team_id)
         

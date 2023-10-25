@@ -1,0 +1,573 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AWS CloudFormation template for Gateflag global config (gateway, networking, IAM, key rotator) deployment.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: Gateflag
+    Description: A friendly environment name that will be used for namespacing all cluster resources.
+  FlagServerHost:
+    Type: String
+    Default: https://flaggy.free.beeceptor.com
+    Description: The URL of host server that will emit the CTF flag upon request.
+  CTFTickDuration:
+    Type: Number
+    Description: Minute definition of a 'tick' on the CTF competition.
+    Default: 5
+    MinValue: 1
+    MaxValue: 59
+  GateFlagSecret:
+    Type: String
+    Default: secret
+    Description: GateFlagSecret
+  Vpc:
+    Type: String
+    Default: vpcid
+    Description: VPC Id
+  PublicRouteTable:
+    Type: String
+    Default: PublicRouteTable
+    Description: PublicRouteTable
+  
+Resources:
+  # API Gateway Establishment. 
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Ref EnvironmentName
+      FailOnWarnings: 'true'
+      EndpointConfiguration:
+        Types:
+          - PRIVATE
+      Policy: !Sub |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "execute-api:Invoke",
+              "Resource": "execute-api:/*/*/*",
+              "Condition": {
+                  "StringNotEquals": {
+                      "aws:sourceVpce": "${RestApiVpcEndpoint}"
+                  }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "execute-api:Invoke",
+              "Resource": "execute-api:/*/*/*"
+            }
+          ]
+        }
+  RestApiUserFlagResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt RestApi.RootResourceId
+      RestApiId: !Ref RestApi
+      PathPart: user_flag
+  RestApiRootFlagResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt RestApi.RootResourceId
+      RestApiId: !Ref RestApi
+      PathPart: root_flag
+  RestApiUserFlagMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: AWS_IAM
+      HttpMethod: GET
+      ResourceId: !Ref RestApiUserFlagResource
+      RestApiId: !Ref RestApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: HTTP
+        Uri: !Sub ${FlagServerHost}/api/v1/flagserver/user_flag
+        IntegrationResponses:
+          - StatusCode: 200
+        RequestParameters:
+          integration.request.header.x-adce-secret: !Ref GateFlagSecret
+          integration.request.header.x-source-ip: context.identity.sourceIp
+          integration.request.header.x-userarn: context.identity.userArn
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: !Ref FlagModel
+  RestApiRootFlagMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: AWS_IAM
+      HttpMethod: GET
+      ResourceId: !Ref RestApiRootFlagResource
+      RestApiId: !Ref RestApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: HTTP
+        Uri: !Sub ${FlagServerHost}/api/v1/flagserver/root_flag
+        IntegrationResponses:
+          - StatusCode: 200
+        RequestParameters:
+          integration.request.header.x-adce-secret: !Ref GateFlagSecret
+          integration.request.header.x-source-ip: context.identity.sourceIp
+          integration.request.header.x-userarn: context.identity.userArn
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: !Ref FlagModel
+  RestApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: 
+      - RestApiUserFlagMethod
+      - RestApiRootFlagMethod
+    Properties:
+      RestApiId: !Ref RestApi
+      Description: Deployment of Gateflag.
+  RestApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: stable
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref RestApiDeployment
+      Description: Stage marked as stable for Gateflag deployment.
+  FlagModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      ContentType: application/json
+      Name: FlagModel
+      RestApiId: !Ref RestApi
+      Schema:
+        "$schema": http://json-schema.org/draft-04/schema#
+        title: Flag
+        type: object
+        additionalProperties: false
+        properties:
+          status:
+            type: string
+          message:
+            type: string
+          data:
+            type: object
+            properties:
+              flag:
+                type: string
+              type:
+                type: string
+              generated_at:
+                type: string
+        required:
+          - status
+
+  # Lambda & CloudWatch Establishment for Periodic Key Rotation
+  RotateIAMKeysLambda:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      FunctionName: __GATEFLAG__RotateIAMKeysLambda
+      Runtime: nodejs14.x
+      Handler: index.handler
+      Timeout: 60
+      Role: !GetAtt RotateIAMKeysLambdaRole.Arn
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSLambdaIAMPolicy
+      CodeUri: . 
+      InlineCode: |
+        const AWS = require('aws-sdk');
+        const iam = new AWS.IAM();
+        const ec2 = new AWS.EC2();
+        const ssm = new AWS.SSM();
+
+        async function updateCliConfiguration(instanceId, username, accessKey, secretKey) {
+            const result = await ssm.sendCommand({
+              InstanceIds: [instanceId],
+              DocumentName: "AWS-RunShellScript",
+              Parameters: {
+                commands: [
+                  `su ${username} -c "echo '[default]' > ~/.aws/credentials"`, 
+                  `su ${username} -c "echo 'aws_access_key_id=${accessKey}' >> ~/.aws/credentials"`, 
+                  `su ${username} -c "echo 'aws_secret_access_key=${secretKey}' >> ~/.aws/credentials"`
+                ],
+              },
+            }).promise();
+            console.log("Rotation command has been executed via SSM. Result: ", result);
+        }
+
+        exports.handler = async (event, context) => {
+            try {
+                const { Users } = await iam.listUsers().promise();
+
+                for (const user of Users) {
+                    console.log(user);
+                    
+                    const userTags = await iam.listUserTags({ UserName: user.UserName }).promise();
+                    console.log(userTags);
+
+                    if (!userTags.Tags.some(tag => tag.Key === 'ManagedBy' && tag.Value === '__GATEFLAG__')) {
+                        console.log(`The user: ${user.UserName} is not managed by Gateflag and is skipped.`)
+                        continue;
+                    }
+                    
+                    var gateflagSpecificName = userTags.Tags.find(item => item.Key === 'GateflagSpecificName');
+                    gateflagSpecificName = gateflagSpecificName ? gateflagSpecificName.Value : undefined;
+                    
+                    var boxLocalUser = userTags.Tags.find(item => item.Key === 'BoxLocalUserName');
+                    boxLocalUser = boxLocalUser ? boxLocalUser.Value : undefined;
+                    
+                    if (!gateflagSpecificName || !boxLocalUser) {
+                        console.log(`Failed to get some box information from the tags. Skipping...`)
+                        continue;
+                    }
+                    
+                    const { AccessKeyMetadata } = await iam.listAccessKeys({ UserName: user.UserName }).promise();
+
+                    if (AccessKeyMetadata.length > 0) {
+                        
+                        if (AccessKeyMetadata.length == 2) {
+                            const currentAccessKeyId = AccessKeyMetadata[1].AccessKeyId;
+                            await iam.deleteAccessKey({ UserName: user.UserName, AccessKeyId: currentAccessKeyId }).promise();
+                            
+                            console.log(`There are already two access keys for user: ${user.UserName}. One of the access key has been deleted successfully.`);
+                        }
+                        
+                        const currentAccessKeyId = AccessKeyMetadata[0].AccessKeyId;
+                        var newKey = await iam.createAccessKey({ UserName: user.UserName }).promise();
+                        newKey = newKey ? newKey.AccessKey : undefined;
+                        
+                        if (!newKey) {
+                            console.log(`Failed to new key for user: ${user.UserName}. Skipping...`)
+                            continue;
+                        }
+                        console.log(newKey);
+                        
+                        const response = await ec2.describeInstances({
+                            Filters: [
+                                {
+                                    Name: 'tag:ManagedBy',
+                                    Values: ['__GATEFLAG__']
+                                },
+                                {
+                                    Name: 'tag:Name',
+                                    Values: [gateflagSpecificName]
+                                },
+                                {
+                                    Name: 'instance-state-name',
+                                    Values: ['running']
+                                }
+                            ]
+                        }).promise();
+                
+                        const instances = response.Reservations.flatMap(reservation =>
+                            reservation.Instances.map(instance => {
+                                return {
+                                    InstanceId: instance.InstanceId,
+                                    InstanceType: instance.InstanceType,
+                                }  
+                            })
+                        );
+
+                        // Rotate the access keys inside EC2 using AWS Systems Manager (SSM)
+                        for (instance of instances) {
+                            console.log(`Rotating access keys in instance: ${instance.InstanceId} with new keys: ${newKey.AccessKeyId} & ${newKey.SecretAccessKey}`);
+                            await updateCliConfiguration(instance.InstanceId, boxLocalUser, newKey.AccessKeyId, newKey.SecretAccessKey);
+                        }
+                        
+                        await iam.deleteAccessKey({ UserName: user.UserName, AccessKeyId: currentAccessKeyId }).promise();
+                        console.log(`Access key rotated for user: ${user.UserName}`);
+                        
+                    } else {
+                        
+                        console.log(`No access keys found for user: ${user.UserName}`);
+                        
+                    }
+                }
+
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({ message: 'Access key rotation completed.' }),
+                };
+
+            } catch (error) {
+                console.error('Error:', error);
+
+                return {
+                    statusCode: 500,
+                    body: JSON.stringify({ error: 'Internal server error' }),
+                };
+            }
+        };
+  RotateIAMKeysEventBridgeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: 'Run __GATEFLAG__RotateIAMKeysLambda fuction every N minutes'
+      ScheduleExpression: !Sub 'rate(${CTFTickDuration} minutes)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt RotateIAMKeysLambda.Arn
+          Id: RotateIAMKeysLambda
+  RotateIAMKeysEventBridgePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref RotateIAMKeysLambda
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt RotateIAMKeysEventBridgeRule.Arn
+  
+  # IAM and Policy Establishment.
+  CTFUserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: __GATEFLAG__CTFUserRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref CTFUserGetFlagThroughAPIGateway
+    DependsOn: "CTFUserGetFlagThroughAPIGateway"
+  CTFRootRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: __GATEFLAG__CTFRootRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref CTFRootGetFlagThroughAPIGateway
+    DependsOn: "CTFRootGetFlagThroughAPIGateway"
+  CTFUserGetFlagThroughAPIGateway:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: __GATEFLAG__CTFUserGetFlagThroughAPIGateway
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 
+              - execute-api:Invoke
+            Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/GET/user_flag
+  CTFRootGetFlagThroughAPIGateway:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: __GATEFLAG__CTFRootGetFlagThroughAPIGateway
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: 
+              - execute-api:Invoke
+            Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/GET/root_flag
+  RotateIAMKeysLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: __GATEFLAG__RotateIAMKeysLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:ListUsers
+                  - iam:ListAccessKeys
+                  - iam:CreateAccessKey
+                  - iam:DeleteAccessKey
+                  - iam:ListUserTags
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sts:AssumeRole
+                  - ec2:DescribeInstances
+                  - ssm:PutParameter
+                  - ssm:SendCommand
+                  - ssm:StartSession
+                  - ssm:AssumeRole
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: '*'
+              - Effect: 'Allow'
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+
+  # EC2 Networking Establishment
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.128.0/17
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  EC2SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref EC2SubnetInfra
+  EC2Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.128.0/24
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+  EC2PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.129.0/24
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+  EC2PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref EC2PublicSubnet
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    Properties: 
+      Domain: vpc
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties: 
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref EC2PublicSubnet
+  EC2PrivateToPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+  EC2PrivateToPublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref EC2PrivateToPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+  EC2SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref EC2PrivateToPublicRouteTable
+      SubnetId: !Ref EC2Subnet
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for Gateflag CTFBox 
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - CidrIp: 10.0.0.0/8
+          IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+        - CidrIp: 10.0.0.0/8
+          IpProtocol: udp
+          FromPort: 0
+          ToPort: 65535
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+      Tags:
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+  EC2SSMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: ["ec2.amazonaws.com"]
+            Action: "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+        - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: '/'
+      Roles:
+        - !Ref EC2SSMRole
+  RestApiVpcEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.execute-api
+      PrivateDnsEnabled: true
+      VpcId: !Ref Vpc
+      SecurityGroupIds:
+        - !GetAtt EC2SecurityGroup.GroupId
+      SubnetIds:
+        - !Ref EC2Subnet
+      VpcEndpointType: Interface
+
+Outputs:
+  GateflagRestApiUrl:
+    Description: URL of the Gateflag REST API
+    Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${RestApiStage}"
+  CTFUserGetFlagThroughAPIGateway:
+    Description: CTFUserGetFlagThroughAPIGateway
+    Value: !Ref CTFUserGetFlagThroughAPIGateway
+  CTFRootGetFlagThroughAPIGateway:
+    Description: CTFRootGetFlagThroughAPIGateway
+    Value: !Ref CTFRootGetFlagThroughAPIGateway
+  EC2InstanceProfile:
+    Description: EC2InstanceProfile
+    Value: !Ref EC2InstanceProfile
+  EC2SecurityGroupGroupId:
+    Description: EC2SecurityGroupGroupId
+    Value: !GetAtt EC2SecurityGroup.GroupId
+  EC2Subnet:
+    Description: EC2Subnet
+    Value: !Ref EC2Subnet

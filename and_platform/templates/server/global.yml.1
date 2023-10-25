@@ -413,7 +413,7 @@ Resources:
   EC2Subnet:
     Type: AWS::EC2::Subnet
     Properties:
-      CidrBlock: 10.0.64.0/18
+      CidrBlock: 10.0.0.0/24
       MapPublicIpOnLaunch: false
       VpcId: !Ref Vpc
       Tags:
@@ -422,7 +422,7 @@ Resources:
   EC2PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
-      CidrBlock: 10.0.254.0/24
+      CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: false
       VpcId: !Ref Vpc
       Tags:
@@ -466,11 +466,11 @@ Resources:
       GroupDescription: Security Group for Gateflag CTFBox 
       VpcId: !Ref Vpc
       SecurityGroupIngress:
-        - CidrIp: 10.0.0.0/8
+        - CidrIp: 10.0.0.0/16
           IpProtocol: tcp
           FromPort: 0
           ToPort: 65535
-        - CidrIp: 10.0.0.0/8
+        - CidrIp: 10.0.0.0/16
           IpProtocol: udp
           FromPort: 0
           ToPort: 65535

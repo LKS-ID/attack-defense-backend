@@ -1,0 +1,173 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AWS CloudFormation template for Gateflag team config (user, ec2 instance) deployment.
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: Gateflag
+    Description: A friendly environment name that will be used for namespacing all cluster resources.
+  CTFMachineAMI1:
+    Type: String
+    Default: ami-0afd0b2f1ea7e2974
+    Description: The AMI ID for CTF challenge machine that will be created using EC2.
+  CTFMachineAMI2:
+    Type: String
+    Default: ami-086171d571328abeb
+    Description: The AMI ID for CTF challenge machine that will be created using EC2.
+  CTFEC2KeyPair:
+    Type: String
+    Default: test-infra-lks
+    Description: The KeyPair configuration to connect to EC2 instances.
+  FlagTakerScript:
+    Type: String
+    Default: https://raw.githubusercontent.com/chrisandoryan/Gateflag/main/aws/take_flag.py
+    Description: Script that automates the flag-taking process inside EC2 CTF instances.
+  CTFBoxLowPrivilegeUser:
+    Type: String
+    Default: ubuntu
+    Description: The name of low-privilege user inside Gateflag CTFBox.
+  
+  # must be supplied correctly after deploy global
+  GateflagRestApiUrl:
+    Type: String
+    Default: GateflagRestApiUrl
+    Description: GateflagRestApiUrl
+  CTFUserGetFlagThroughAPIGateway:
+    Type: String
+    Default: CTFUserGetFlagThroughAPIGateway
+    Description: CTFUserGetFlagThroughAPIGateway
+  CTFRootGetFlagThroughAPIGateway:
+    Type: String
+    Default: CTFRootGetFlagThroughAPIGateway
+    Description: CTFRootGetFlagThroughAPIGateway
+  EC2InstanceProfile:
+    Type: String
+    Default: EC2InstanceProfile
+    Description: EC2InstanceProfile
+  EC2SecurityGroupGroupId:
+    Type: String
+    Default: EC2SecurityGroupGroupId
+    Description: EC2SecurityGroupGroupId
+  EC2Subnet:
+    Type: String
+    Default: EC2Subnet
+    Description: EC2Subnet
+
+  # be cautious, must assigned uniquely per instance
+  PrivateIpAddress:
+    Type: String
+    Default: 10.0.1.1
+    Description: Assigned internal IP address.
+
+Resources:
+  # IAM Users Configuration
+  CTFUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: __GATEFLAG__CTFUser__TEAM__
+      Tags:
+        - Key: Name
+          Value: __TEAM__
+        - Key: GateflagSpecificName
+          Value: __TEAM__
+        - Key: BoxLocalUserName
+          Value: !Ref CTFBoxLowPrivilegeUser
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+      ManagedPolicyArns:
+        - !Ref CTFUserGetFlagThroughAPIGateway
+  CTFRoot:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: __GATEFLAG__CTFRoot__TEAM__
+      Tags:
+        - Key: Name
+          Value: __TEAM__
+        - Key: GateflagSpecificName
+          Value: __TEAM__
+        - Key: BoxLocalUserName
+          Value: root
+        - Key: ManagedBy
+          Value: !Ref EnvironmentName
+      ManagedPolicyArns:
+        - !Ref CTFRootGetFlagThroughAPIGateway
+  CTFUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref CTFUser
+  CTFRootAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref CTFRoot
+
+  # EC2 Instance Establishment
+  CTFMachineEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      PrivateIpAddress: !Ref PrivateIpAddress
+      KeyName: !Ref CTFEC2KeyPair
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroupGroupId
+      SubnetId: !Ref EC2Subnet
+      ImageId: !Ref CTFMachineAMI1
+      Tags:
+        # This tag is required to perform access keys rotation according to the team that this box belongs to (see lambda: RotateIAMKeysLambda).
+        - Key: Name
+          Value: __TEAM__
+        # This tag indicates that the box is Gateflag-managed so Gateflag could perform its automated managements.
+        - Key: ManagedBy 
+          Value: !Ref EnvironmentName
+      UserData:
+        Fn::Base64: !Sub |          
+          #!/bin/bash -xe
+          apt update -y
+          apt install -y awscli python3-pip
+          pip3 install boto3 requests
+
+          # Download and configure the flag-taking script
+          curl ${FlagTakerScript} -o /usr/local/bin/takeflag
+          chmod a+x /usr/local/bin/takeflag
+
+          # Configure AWS CLI with the access key ID and secret access key for CTFRoot
+          # Note: shell execution from the instance's UserData is always running as root privilege by default
+          aws configure set aws_access_key_id ${CTFRootAccessKey}
+          aws configure set aws_secret_access_key ${CTFRootAccessKey.SecretAccessKey}
+          aws configure set region ${AWS::Region}
+
+          # Set an environment variable for root user that points to the root_flag API gateway.
+          echo 'export FLAG_GATEWAY=${GateflagRestApiUrl}/root_flag' >> ~/.bashrc
+
+          # Configure AWS CLI with the access key ID and secret access key for CTFUser
+          su ${CTFBoxLowPrivilegeUser} -c "aws configure set aws_access_key_id ${CTFUserAccessKey}"
+          su ${CTFBoxLowPrivilegeUser} -c "aws configure set aws_secret_access_key ${CTFUserAccessKey.SecretAccessKey}"
+          su ${CTFBoxLowPrivilegeUser} -c "aws configure set region ${AWS::Region}"
+
+          # Set an environment variable for default user that points to the user_flag API gateway.
+          su ${CTFBoxLowPrivilegeUser} -c "echo 'export FLAG_GATEWAY=${GateflagRestApiUrl}/user_flag' >> ~/.bashrc"
+
+          # Add instruction on how to get the flag in this instance.
+          echo "Use /usr/local/bin/takeflag to get the user/root flag." > /tmp/CTF-README.txt
+
+          # Install AWS SSM Agent (for AMI without SSM pre-installed)
+          # mkdir /tmp/ssm
+          # cd /tmp/ssm
+          # wget https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb
+          # dpkg -i amazon-ssm-agent.deb
+          # systemctl enable amazon-ssm-agent
+          # systemctl start amazon-ssm-agent
+
+Outputs:
+  CTFMachineInstanceId:
+    Value: !Ref CTFMachineEC2Instance
+    Description: Instance ID of the CTF EC2 instance
+  CTFMachinePrivateIp:
+    Value: !GetAtt CTFMachineEC2Instance.PrivateIp
+    Description: Public IP address of the CTF EC2 instance
+  CTFRoot:
+    Value: !GetAtt CTFRoot.Arn
+    Description: CTFRoot
+  CTFUser:
+    Value: !GetAtt CTFUser.Arn
+    Description: CTFUser
