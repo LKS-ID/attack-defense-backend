@@ -13,7 +13,8 @@ from multiprocessing.pool import ThreadPool
 import traceback
 
 class Helper():
-    def __init__(self, addresses, local_chall_dir):
+    def __init__(self, addresses, local_chall_dir, team_id):
+        self.team_id = team_id
         self.addresses = addresses
         self.local_chall_dir = local_chall_dir
     
@@ -54,6 +55,7 @@ class CheckerExecutor():
                 helper = Helper(
                     addresses=addresses,
                     local_chall_dir=chall_dir,
+                    team_id=team_id,
                 )
                 
                 test_script = SourceFileLoader("checker_test", script_path).load_module()
