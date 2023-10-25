@@ -10,7 +10,7 @@ class FlagNotFoundException(Exception):
     """Exception for flag not found"""
 
 def get_flag_by_serverip(subid: int) -> str:
-    target_identifier = request.headers.get("x-source-ip", None)
+    target_identifier = request.headers.get("x-source-ip", "0.0.0.0")
     challenge_id = request.get_json().get("challenge_id", 1)
 
     current_tick = get_config("CURRENT_TICK", 0)
