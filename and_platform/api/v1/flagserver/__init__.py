@@ -13,8 +13,8 @@ def get_flag_by_serverip(subid: int) -> str:
     target_identifier = request.headers.get("x-source-ip", None)
     challenge_id = request.get_json().get("challenge_id", 1)
 
-    current_tick = get_config("CURRENT_TICK")
-    current_round = get_config("CURRENT_ROUND")
+    current_tick = get_config("CURRENT_TICK", 0)
+    current_round = get_config("CURRENT_ROUND", 0)
 
     team_id = db.session.query(Teams.id).join(Servers, Servers.id == Teams.server_id).filter(Servers.host == target_identifier).scalar()
     if team_id == None:
@@ -40,7 +40,7 @@ def get_flag_api_handler(subid):
     }
     data_resp = {
         "type": SUBID_TRANSFORM[subid],
-        "generated_at": "tick " + get_config("CURRENT_TICK"),
+        "generated_at": "tick " + get_config("CURRENT_TICK", 0),
     }
 
     try:
