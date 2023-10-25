@@ -42,10 +42,11 @@ def manage_machine():
 def get_vpn():
     num_member = get_config("NUM_MEMBER", 2)
     vpn_folder = os.path.join(get_app_config("DATA_DIR"), "vpn")
-    vpnzip_path = os.path.join(vpn_folder, "zip", f"team{current_team.id}.zip")
+    vpnzip_path = os.path.join(get_app_config("DATA_DIR"), "vpn-zip", f"team{current_team.id}.zip")
     with zipfile.ZipFile(vpnzip_path, "w") as vpnzip:
         start_idx = num_member * (current_team.id - 1) + 1
         for i in range(start_idx, start_idx + num_member):
-            vpnfile = os.path.join(vpn_folder, f"user{i}.client.conf")
-            vpnzip.write(vpnfile)
-    send_file(vpnzip_path)
+            vpnfilename = f"user{i}.client.conf"
+            vpnfilepath = os.path.join(vpn_folder, vpnfilename)
+            vpnzip.write(vpnfilepath, arcname=vpnfilename)
+    return send_file(vpnzip_path)
