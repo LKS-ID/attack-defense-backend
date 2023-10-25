@@ -44,19 +44,17 @@ def get_aws_session(team_id):
     )
 
 def get_cf_client(team_id):
-    with get_aws_session(team_id) as aws_session:
-        return aws_session.client('cloudformation')
+    return get_aws_session(team_id).client('cloudformation')
 
 def create_key_pair(name, team_id = -1):
-    with get_aws_session(team_id) as aws_session:
-        with aws_session.client('ec2') as ec2_client:
-            try:
-                response = ec2_client.create_key_pair(KeyName=name)
-                return response['KeyMaterial']
-            except Exception:
-                ec2_client.delete_key_pair(KeyName=name)
-                response = ec2_client.create_key_pair(KeyName=name)
-                return response['KeyMaterial']
+    with get_aws_session(team_id).client('ec2') as ec2_client:
+        try:
+            response = ec2_client.create_key_pair(KeyName=name)
+            return response['KeyMaterial']
+        except Exception:
+            ec2_client.delete_key_pair(KeyName=name)
+            response = ec2_client.create_key_pair(KeyName=name)
+            return response['KeyMaterial']
 
 def get_stack_name(stack_type, suffix=''):
     if suffix != '':
