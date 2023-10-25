@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from and_platform.core.config import get_config
 from and_platform.core.security import gateflag_only
-from and_platform.models import db, Teams, Servers, Flags
+from and_platform.models import db, Teams, Servers, Flags, Challenges
 
 flagserverapi_blueprint = Blueprint("flagserver", __name__, url_prefix="/flagserver")
 flagserverapi_blueprint.before_request(gateflag_only)
@@ -11,7 +11,9 @@ class FlagNotFoundException(Exception):
 
 def get_flag_by_serverip(subid: int) -> str:
     target_identifier = request.headers.get("x-source-ip", "0.0.0.0")
-    challenge_id = request.get_json().get("challenge_id", 1)
+    challenge_id = Challenges.query.scalar().id
+    if request.content_type == "application/json":
+        challenge_id = request.get_json().get("challenge_id", 1)
 
     current_tick = get_config("CURRENT_TICK", 0)
     current_round = get_config("CURRENT_ROUND", 0)
@@ -48,7 +50,7 @@ def get_flag_api_handler(subid):
         data_resp["flag"] = flag_value
     except FlagNotFoundException as e:
         return jsonify(status="failed", message=str(e))
-    except:
+    except Exception as e:
         return jsonify(status="failed", message="something went wrong.")
     return jsonify(status="ok", data=data_resp)
 
