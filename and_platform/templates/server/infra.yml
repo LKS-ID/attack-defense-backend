@@ -5,7 +5,7 @@ Description: AWS CloudFormation template for Infra config (gateway, networking, 
 Parameters:
   EnvironmentName:
     Type: String
-    Default: LKS-AnD-Warmup
+    Default: LKS-AnD
     Description: A friendly environment name that will be used for namespacing all cluster resources.
   CTFEC2KeyPair:
     Type: String

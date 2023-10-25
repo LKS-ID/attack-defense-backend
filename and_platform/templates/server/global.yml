@@ -454,7 +454,7 @@ Resources:
     Properties:
       RouteTableId: !Ref EC2PrivateToPublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref NATGateway
+      NatGatewayId: !Ref NATGateway
   EC2SubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
