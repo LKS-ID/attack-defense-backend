@@ -1,7 +1,8 @@
 import celery
-from and_platform.aws import GLOBAL_TEMPLATE_PARAMETERS, TEAM_TEMPLATE_PARAMETERS, AWS_STACK_PREFIX, deploy_stack, get_stack_name, create_key_pair, rollback
-from and_platform.core.config import get_app_config, get_config
+from and_platform.aws import GLOBAL_TEMPLATE_PARAMETERS, TEAM_TEMPLATE_PARAMETERS, AWS_STACK_PREFIX, deploy_stack, get_stack_name, create_key_pair, rollback, delete_stack
+from and_platform.core.config import get_app_config, get_config, set_config
 import os
+import json
 from and_platform.models import db, Teams, Servers, ServerAWSInfos
 
 def generate_team_private_ip(team_id):
@@ -16,8 +17,11 @@ def replace_template(content, team_id = 0):
     content = content.replace("__TEAM__", f'team{team_id}')
     return content
 
-@celery.shared_task
-def do_server_provision():
+def provision_or_get_global_stack(is_force=False):
+    CFG_NAME = "AWS_GLOBAL_STACK_OUTPUT"
+    stack_output = get_config(CFG_NAME)
+    if not is_force and stack_output:
+        return json.loads(stack_output)
     template_dir = os.path.join(get_app_config("TEMPLATE_DIR"), "server")
     
     with open(os.path.join(template_dir, "global.yml")) as f:
@@ -32,82 +36,31 @@ def do_server_provision():
         stack_global_template,
         global_template_params,
     )
-
-    team_parameters = TEAM_TEMPLATE_PARAMETERS
+    
+    output_stack_global_json = {}
     for output in output_stack_global:
-        team_parameters[output['OutputKey']] = output['OutputValue']
+        output_stack_global_json[output['OutputKey']] = output['OutputValue']
+    set_config(CFG_NAME, json.dumps(output_stack_global_json))
+    return output_stack_global_json
 
+def do_server_bulk_provision(is_force):
+    provision_or_get_global_stack(is_force)
     teams = Teams.query.all()
     for team in teams:
-        team_id = team.id
-        team_keypairname = generate_team_keypairname(team_id)
-        team_parameters['CTFEC2KeyPair'] = team_keypairname
-        team_parameters['PrivateIpAddress'] = generate_team_private_ip(team_id)
-
-        ssh_privkey = create_key_pair(team_keypairname)
-        with open(os.path.join(template_dir, "team.yml")) as f:
-            stack_team_template = f.read()
-            stack_team_template = replace_template(stack_team_template, team_id)
-        
-        output_stack_team = deploy_stack(
-            get_stack_name(1, f'team{team_id}'),
-            stack_team_template,
-            team_parameters,
-        )
-        
-        result_stack = {}
-        for output in output_stack_team:
-            result_stack[output['OutputKey']] = output['OutputValue']
-        server = Servers.query.filter(Servers.host == result_stack["CTFMachinePrivateIp"]).scalar()
-        if server == None:
-            server = Servers(
-                host = result_stack["CTFMachinePrivateIp"],
-                sshport = 22,
-                username = "ubuntu",
-                auth_key = ssh_privkey,
-            )
-            db.session.add(server)
-            db.session.commit()
-            db.session.refresh(server)
-        else:
-            server.auth_key = ssh_privkey
-            db.session.flush([server])
-
-        team.server_id = server.id
-        team.server_host = result_stack["CTFMachinePrivateIp"]
-        db.session.flush([team])
-        
-        awsinfo = ServerAWSInfos(
-            server_id = server.id,
-            instance_id = result_stack["CTFMachineInstanceId"]
-        )
-        db.session.add(awsinfo)
-        db.session.commit()
+        do_server_bulk_provision.apply_async(team.id)
 
 @celery.shared_task
-def do_one_provision(team_id):
+def do_server_provision(team_id):
     template_dir = os.path.join(get_app_config("TEMPLATE_DIR"), "server")
     
-    with open(os.path.join(template_dir, "global.yml")) as f:
-        stack_global_template = f.read()
-        stack_global_template = replace_template(stack_global_template)
-
-    global_template_params = GLOBAL_TEMPLATE_PARAMETERS
-    global_template_params["GateFlagSecret"] = "'" + get_config("GATEFLAG_SECRET") + "'"
-
-    output_stack_global = deploy_stack(
-        get_stack_name(0),
-        stack_global_template,
-        global_template_params,
-    )
+    output_stack_global = provision_or_get_global_stack()
 
     team_parameters = TEAM_TEMPLATE_PARAMETERS
-    for output in output_stack_global:
-        team_parameters[output['OutputKey']] = output['OutputValue']
+    team_parameters.update(output_stack_global)
 
-        team_keypairname = generate_team_keypairname(team_id)
-        team_parameters['CTFEC2KeyPair'] = team_keypairname
-        team_parameters['PrivateIpAddress'] = generate_team_private_ip(team_id)
+    team_keypairname = generate_team_keypairname(team_id)
+    team_parameters['CTFEC2KeyPair'] = team_keypairname
+    team_parameters['PrivateIpAddress'] = generate_team_private_ip(team_id)
 
     ssh_privkey = create_key_pair(team_keypairname)
     with open(os.path.join(template_dir, "team.yml")) as f:
@@ -150,6 +103,17 @@ def do_one_provision(team_id):
     db.session.add(awsinfo)
     db.session.commit()
 
+def do_server_bulk_destroy():
+    teams = Teams.query.all()
+    for team in teams:
+        team_id = team.id
+        do_server_destroy.apply_async(args=(team_id, ), queue='contest')
+
+@celery.shared_task
+def do_server_destroy(team_id):
+    stack_name = get_stack_name(1, 'team' + str(team_id))
+    delete_stack(stack_name)
+
 @celery.shared_task
 def do_rollback(team_id):
     output_stack_team = rollback(team_id)
@@ -166,6 +130,5 @@ def do_rollback(team_id):
     ).scalar()
 
     awsinfo.instance_id = result_stack["CTFMachineInstanceId"]
-    print("New instance id " + result_stack["CTFMachineInstanceId"])
     db.session.flush([awsinfo])
     db.session.commit()

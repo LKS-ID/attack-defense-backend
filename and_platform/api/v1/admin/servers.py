@@ -21,28 +21,52 @@ def get_by_id(server_id):
 
     return jsonify(status="success", data=server), 200
 
-@servers_blueprint.post("/provision")
+@servers_blueprint.post("/bulk-destroy")
+def destroy_all_servers():
+    from and_platform.core.server import do_server_bulk_destroy
+    
+    confirm_data: dict = request.get_json()
+    if not confirm_data.get("confirm"):
+        return jsonify(status="bad request", message="action not confirmed"), 400
+    
+    do_server_bulk_destroy()
+    return jsonify(status="success", message="destroy server is on progress"), 200
+
+
+@servers_blueprint.post("/bulk-provision")
 def provision_all_servers():
+    from and_platform.core.server import do_server_bulk_provision
+    
+    confirm_data: dict = request.get_json()
+    if not confirm_data.get("confirm"):
+        return jsonify(status="bad request", message="action not confirmed"), 400
+    
+    do_server_bulk_provision(confirm_data.get("is_force", False))
+    return jsonify(status="success", message="provisioning server is on progress"), 200
+
+
+@servers_blueprint.post("/<int:team_id>/provision")
+def provision_one_servers(team_id):
     from and_platform.core.server import do_server_provision
     
     confirm_data: dict = request.get_json()
     if not confirm_data.get("confirm"):
         return jsonify(status="bad request", message="action not confirmed"), 400
     
-    do_server_provision.apply_async(queue='contest')
+    do_server_provision.apply_async(args=(team_id, ), queue='contest')
     return jsonify(status="success", message="provisioning server is on progress"), 200
 
-
-@servers_blueprint.post("/provision/<int:team_id>")
-def provision_one_servers(team_id):
-    from and_platform.core.server import do_one_provision
+@servers_blueprint.post("/<int:team_id>/destroy")
+def destroy_server(team_id):
+    from and_platform.core.server import do_server_destroy
     
     confirm_data: dict = request.get_json()
     if not confirm_data.get("confirm"):
         return jsonify(status="bad request", message="action not confirmed"), 400
     
-    do_one_provision.apply_async(args=(team_id, ), queue='contest')
-    return jsonify(status="success", message="provisioning server is on progress"), 200
+    do_server_destroy.apply_async(args=(team_id, ), queue='contest')
+    return jsonify(status="success", message="destroy server is on progress"), 200
+
 
 @servers_blueprint.post("/<int:team_id>/rollback")
 def admin_server_rollback(team_id):
@@ -58,7 +82,7 @@ def admin_server_rollback(team_id):
     
     do_rollback.apply_async(args=(team_id, ), queue='contest')
     return jsonify(status="success", message="rollback request submitted.")
-  
+
 
 @servers_blueprint.get("/<int:team_id>/status")
 def admin_server_getstatus(team_id):
