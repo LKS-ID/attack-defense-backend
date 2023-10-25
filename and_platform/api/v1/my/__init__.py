@@ -6,6 +6,7 @@ from and_platform.core.security import validteam_only, current_team
 from and_platform.models import ChallengeReleases, Solves, Servers, Teams
 import os
 import zipfile
+from secrets import token_hex
 
 myapi_blueprint = Blueprint("myapi", __name__, url_prefix="/my")
 myapi_blueprint.before_request(validteam_only)
@@ -42,6 +43,7 @@ def manage_machine():
 def get_vpn():
     num_member = get_config("NUM_MEMBER", 2)
     vpn_folder = os.path.join(get_app_config("DATA_DIR"), "vpn")
+    claim_token = token_hex(6)
     vpnzip_path = os.path.join(get_app_config("DATA_DIR"), "vpn-zip", f"team{current_team.id}.zip")
     with zipfile.ZipFile(vpnzip_path, "w") as vpnzip:
         start_idx = num_member * (current_team.id - 1) + 1
