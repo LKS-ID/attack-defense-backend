@@ -166,5 +166,5 @@ def rollback(team_id):
     print('Rollback instance for %s' % stack_name)
     cf_client.close()
 
-    delete_stack(stack_name)
-    return deploy_stack(stack_name, modified, parameters)
+    delete_stack(stack_name, team_id=team_id)
+    return deploy_stack(stack_name, modified, parameters, team_id=team_id)
