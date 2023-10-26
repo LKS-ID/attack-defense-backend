@@ -72,6 +72,15 @@ services:
     depends_on:
     - db
     - cache
+  checker4:
+    build: .
+    restart: always
+    command: checker
+    volumes:
+    - "./and_platform/.adce_data:/opt/app/and_platform/.adce_data"
+    depends_on:
+    - db
+    - cache
   # sample_server:
   #   privileged: true
   #   build:
