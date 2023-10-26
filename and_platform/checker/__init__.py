@@ -59,7 +59,7 @@ class CheckerExecutor():
                 )
                 
                 test_script = SourceFileLoader("checker_test", script_path).load_module()
-                
+                print(f"Running test for {team_id}:{addresses}")
                 pool = ThreadPool(processes=1)
                 job = pool.apply_async(test_script.do_check, args=(helper, ))
                 pool.close()
