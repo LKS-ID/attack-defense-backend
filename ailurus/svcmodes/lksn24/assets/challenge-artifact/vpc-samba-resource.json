@@ -1,0 +1,559 @@
+{
+    "Parameters": {
+        "EventSlug": {
+            "Type": "String",
+            "Default": "Ailurus",
+            "Description": "A friendly environment name that will be used for namespacing all cluster resources."
+        },
+        "CidrBlock": {
+            "Type": "String",
+            "Default": "10.0.32.0/20",
+            "Description": "The CIDR block for the VPC."
+        },
+        "PublicCidrBlock": {
+            "Type": "String",
+            "Default": "10.0.47.0/24",
+            "Description": "The CIDR block for the public subnet."
+        },
+        "PrivateCidrBlock": {
+            "Type": "String",
+            "Default": "10.0.32.0/22",
+            "Description": "The CIDR block for the private subnet."
+        },
+        "SambaMachinePublicKey": {
+            "Type": "String",
+            "Default": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICfp1F7DhdWZdqkYaUGCZcBsLmJeu9izpIyGpmmg7eCz example",
+            "Description": "Predefined SSH public key that will be installed in Samba server."
+        },
+        "SambaMachineAMI": {
+            "Type": "String",
+            "Default": "ami-04a81a99f5ec58529",
+            "Description": "The AMI ID for samba server."
+        },
+        "SambaPrivateIpAddress": {
+            "Type": "String",
+            "Default": "10.0.35.1",
+            "Description": "Assigned internal IP address for samba server."
+        },
+        "SambaMachineType": {
+            "Type": "String",
+            "Default": "c5a.large",
+            "Description": "Machine type name for samba server."
+        }
+    },
+    "Resources": {
+        "Vpc": {
+            "Type": "AWS::EC2::VPC",
+            "UpdateReplacePolicy": "Delete",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "CidrBlock"
+                },
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "InstanceTenancy": "default",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Ref": "EventSlug"
+                                    },
+                                    "vpc"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": {
+                            "Ref": "EventSlug"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "UpdateReplacePolicy": "Delete",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "PublicCidrBlock"
+                },
+                "MapPublicIpOnLaunch": false,
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Ref": "EventSlug"
+                                    },
+                                    "public-subnet"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": {
+                            "Ref": "EventSlug"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "UpdateReplacePolicy": "Delete",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Ref": "EventSlug"
+                                    },
+                                    "public-routetable"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": {
+                            "Ref": "EventSlug"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "UpdateReplacePolicy": "Delete",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Ref": "EventSlug"
+                                    },
+                                    "igw"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": {
+                            "Ref": "EventSlug"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicRouteTableToInternetGateway": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": [
+                "InternetGatewayAttachment",
+                "InternetGateway"
+            ],
+            "UpdateReplacePolicy": "Delete",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PrivateSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "UpdateReplacePolicy": "Delete",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "PrivateCidrBlock"
+                },
+                "MapPublicIpOnLaunch": false,
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Ref": "EventSlug"
+                                    },
+                                    "private-subnet"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": {
+                            "Ref": "EventSlug"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "UpdateReplacePolicy": "Delete",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Ref": "EventSlug"
+                                    },
+                                    "private-routetable"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": {
+                            "Ref": "EventSlug"
+                        }
+                    }
+                ]
+            }
+        },
+        "NATGatewayEIP": {
+            "Type": "AWS::EC2::EIP",
+            "UpdateReplacePolicy": "Delete",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "ManagedBy",
+                        "Value": {
+                            "Ref": "EventSlug"
+                        }
+                    }
+                ]
+            }
+        },
+        "NATGateway": {
+            "Type": "AWS::EC2::NatGateway",
+            "UpdateReplacePolicy": "Delete",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGatewayEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "-",
+                                [
+                                    {
+                                        "Ref": "EventSlug"
+                                    },
+                                    "nat-gateway"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": {
+                            "Ref": "EventSlug"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTableToNatGateway": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": [
+                "NATGateway"
+            ],
+            "UpdateReplacePolicy": "Delete",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway"
+                }
+            }
+        },
+        "MachineSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "UpdateReplacePolicy": "Delete",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Join": [
+                        "-",
+                        [
+                            {
+                                "Ref": "EventSlug"
+                            },
+                            "machine-security-group"
+                        ]
+                    ]
+                },
+                "GroupDescription": "Security Group for team machine",
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "CidrIp": "10.0.0.0/16",
+                        "IpProtocol": "tcp",
+                        "FromPort": 0,
+                        "ToPort": 65535
+                    },
+                    {
+                        "CidrIp": "10.0.0.0/16",
+                        "IpProtocol": "udp",
+                        "FromPort": 0,
+                        "ToPort": 65535
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "ManagedBy",
+                        "Value": {
+                            "Ref": "EventSlug"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnetPrivateRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet"
+                }
+            }
+        },
+        "PublicSubnetPublicRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet"
+                }
+            }
+        },
+        "SambaServerKeyPair": {
+            "Type": "AWS::EC2::KeyPair",
+            "Properties": {
+                "KeyName": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "KeyPair-SambaServer-",
+                            {
+                                "Ref": "EventSlug"
+                            }
+                        ]
+                    ]
+                },
+                "PublicKeyMaterial": {
+                    "Ref": "SambaMachinePublicKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "ManagedBy",
+                        "Value": {
+                            "Ref": "EventSlug"
+                        }
+                    }
+                ]
+            }
+        },
+        "SambaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "UpdateReplacePolicy": "Delete",
+            "DeletionPolicy": "Delete",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Join": [
+                        "-",
+                        [
+                            {
+                                "Ref": "EventSlug"
+                            },
+                            "samba-security-group"
+                        ]
+                    ]
+                },
+                "GroupDescription": "Security Group for samba server",
+                "VpcId": {
+                    "Ref": "Vpc"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "CidrIp": "10.0.0.0/16",
+                        "IpProtocol": "tcp",
+                        "FromPort": 445,
+                        "ToPort": 445
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "ManagedBy",
+                        "Value": {
+                            "Ref": "EventSlug"
+                        }
+                    }
+                ]
+            }
+        },
+        "SambaServerInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "SambaMachineAMI"
+                },
+                "KeyName": {
+                    "Ref": "SambaServerKeyPair"
+                },
+                "InstanceType": {
+                    "Ref": "SambaMachineType"
+                },
+                "PrivateIpAddress": {
+                    "Ref": "SambaPrivateIpAddress"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "SambaSecurityGroup"
+                    }
+                ],
+                "SubnetId": {
+                    "Ref": "PrivateSubnet"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "samba-server-",
+                                    {
+                                        "Ref": "EventSlug"
+                                    }
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": {
+                            "Ref": "EventSlug"
+                        }
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": "#!/bin/bash\n\n# assume this script is ran from root\nSAMBA_USER=samba-lksn\n\n# install samba\napt update && apt install -y samba\n\n# create user\nuseradd -m -g root $SAMBA_USER\n\n# passwordless samba\n(echo -n ''; echo -n '') | smbpasswd -a $SAMBA_USER\nsmbpasswd -e samba-lksn $SAMBA_USER\n\n# restart smbd\nsystemctl restart smbd"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "MachineSecurityGroupId": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "MachineSecurityGroup",
+                    "GroupId"
+                ]
+            },
+            "Description": "Security group ID created for all teams instances."
+        },
+        "MachineSubnetId": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "PrivateSubnet",
+                    "SubnetId"
+                ]
+            },
+            "Description": "Subnet ID created for all teams instances."
+        }
+    }
+}
