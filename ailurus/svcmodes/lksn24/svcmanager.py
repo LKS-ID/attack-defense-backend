@@ -262,14 +262,19 @@ def do_provision(body: ServiceManagerTaskSchema, **kwargs):
         template_body = fp.read()
 
     # Render team-resources.json template
+    root_chall_detail = ",,,"
     chall_detail_entries = []
     for chall_slug, chall_detail_cfg in configs["challenges"].items():
         share_name = f"flag-{chall_slug}-t{body['team_id']}"
         chall_entry = "\"{slug},{owner},{share_name},{flag_dir}\"".format(
             chall_slug, chall_detail_cfg["owner"], share_name, chall_detail_cfg["flag_dir"])
-        chall_detail_entries.append(chall_entry)
+        if chall_detail_cfg["is_root_flag"]:
+            root_chall_detail = chall_entry.strip()
+        else:
+            chall_detail_entries.append(chall_entry)
     bash_chall_detail = "\\n".join(["("] + chall_detail_entries + [")"])
     template_body = template_body.replace("{{Ailurus.Challenges}}", bash_chall_detail)
+    template_body = template_body.replace("{{Ailurus.RootChallenge}}", root_chall_detail)
     template_body = template_body.replace("{{Ailurus.CheckerPublicKey}}", provision_machine_detail["CheckerPublicKey"])
     template_body = template_body.replace("{{Ailurus.SambaServerPrivateIp}}", provision_machine_detail["SambaServerPrivateIp"])
 

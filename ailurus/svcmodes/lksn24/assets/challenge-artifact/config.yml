@@ -3,8 +3,9 @@ challenges:
     owner: user_owner
     flag_dir: /path/to/mount/flag/dir
   slug2:
-    owner: user_owner
-    flag_dir: /path/to/mount/flag/dir
+    owner: root
+    flag_dir: /root/flag
+    is_root_flag: true
 
 templates:
   infra: vpc-samba-resource.json

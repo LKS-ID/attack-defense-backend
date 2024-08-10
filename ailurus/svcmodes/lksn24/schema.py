@@ -15,3 +15,12 @@ class ServiceDetailSchema(TypedDict):
     stack_name: str
     publish: ServiceDetailPublish
     checker: ServiceDetailChecker
+
+class FlagrotatorTask(TypedDict):
+    flag_value: str
+    flag_order: int
+    challenge_id: int
+    team_id: int
+    current_tick: int
+    current_round: int
+    time_created: str
