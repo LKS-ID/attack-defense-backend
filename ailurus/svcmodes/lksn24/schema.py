@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import TypedDict, Dict
 
 class ServiceManagerTaskSchema(TypedDict):
     action: str
@@ -24,3 +24,17 @@ class FlagrotatorTask(TypedDict):
     current_tick: int
     current_round: int
     time_created: str
+
+class TeamChallengeLeaderboardEntry(TypedDict):
+    flag_captured: int
+    flag_stolen: int
+    attack: str
+    defense: str
+    sla: str
+
+class TeamLeaderboardEntry(TypedDict):
+    id: int
+    name: str
+    rank: int
+    total_score: float
+    challenges: Dict[int, TeamChallengeLeaderboardEntry]
