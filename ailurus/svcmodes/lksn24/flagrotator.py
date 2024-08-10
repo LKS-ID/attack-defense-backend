@@ -5,11 +5,11 @@ import json
 import logging
 import paramiko
 
-from .schema import FlagrotatorTask
+from .schema import FlagrotatorTaskSchema
 
 log = logging.getLogger(__name__)
 
-def handler_flagrotator_task(body: FlagrotatorTask, **kwargs):
+def handler_flagrotator_task(body: FlagrotatorTaskSchema, **kwargs):
     first_challenge: Challenge = Challenge.query.order_by(Challenge.id).first()
     provision_machine = ProvisionMachine.query.filter_by(name=f"cloudformation-{first_challenge.id}").first()
     if not provision_machine:

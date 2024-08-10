@@ -1,4 +1,5 @@
 from typing import TypedDict, Dict
+import datetime
 
 class ServiceManagerTaskSchema(TypedDict):
     action: str
@@ -16,7 +17,7 @@ class ServiceDetailSchema(TypedDict):
     publish: ServiceDetailPublish
     checker: ServiceDetailChecker
 
-class FlagrotatorTask(TypedDict):
+class FlagrotatorTaskSchema(TypedDict):
     flag_value: str
     flag_order: int
     challenge_id: int
@@ -38,3 +39,19 @@ class TeamLeaderboardEntry(TypedDict):
     rank: int
     total_score: float
     challenges: Dict[int, TeamChallengeLeaderboardEntry]
+
+class CheckerTaskSchema(TypedDict):
+    time_limit: int
+    challenge_id: int
+    team_id: int
+    testcase_checksum: str
+    artifact_checksum: str
+    current_tick: int
+    current_round: int
+    time_created: str
+
+class CheckerResultDetailSchema(TypedDict):
+    message: str
+    exception: str
+    checker_output: Dict
+    time_finished: datetime.datetime
