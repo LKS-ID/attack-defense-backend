@@ -44,6 +44,7 @@ Leaderboard sample data.
 [
     {
         "id": 1,
+        "rank": 1,
         "name": "Team Name",
         "total_score": 0,
         "challenges": {
