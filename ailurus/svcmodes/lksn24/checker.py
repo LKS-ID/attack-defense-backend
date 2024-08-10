@@ -101,7 +101,6 @@ def handler_checker_task(body: CheckerTaskSchema, **kwargs):
         log.error("{}", traceback.format_exc())
         checker_detail_result["message"] = "internal error"
         checker_detail_result["exception"] = str(e)
-
         checker_result.status = CheckerStatus.FAULTY
     
     checker_detail_result["time_finished"] = datetime.datetime.now(datetime.timezone.utc).isoformat()

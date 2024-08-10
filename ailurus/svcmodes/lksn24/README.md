@@ -7,6 +7,13 @@ Worker will overwrite the content of `/home/samba-lksn/flags/<challenge_slug>-t<
 ![Architecture diagram for flag rotator](./assets/docs/flagrotator.png)
 
 ## Checker
+There are several checker result messages:
+- `valid`: Everything is working fine.
+- `flag missing`: The service seems to be working, but flags cannot be retrieved.
+- `service faulty`: The service is reachable, but not working correctly.
+- `not reachable`: The service is not reachable.
+- `internal error`: Something went wrong with the checker.
+
 ![Architecture diagram for checker](./assets/docs/checker.png)
 
 ## Service Manager
