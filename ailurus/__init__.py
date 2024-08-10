@@ -108,6 +108,8 @@ def create_worker_daemon(env_file=".env"):
 def create_webapp_daemon(env_file=".env"):
     app = create_app(env_file)
     with app.app_context():
+        create_logger(os.path.join(app.config["DATA_DIR"], "logs", "webapp.log"))
+
         # Security
         setup_jwt_app(app)
         CORS(app)

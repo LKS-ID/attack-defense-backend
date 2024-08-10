@@ -52,12 +52,12 @@ def calculate_team_chall_leaderboard_entry(team_id: int, chall_id: int, freeze_t
 
     result["flag_captured"] = flag_captured
     result["flag_stolen"] = flag_stolen
-    result["attack"] = f"{attack_percentage:.3}%"
-    result["defense"] = f"{defense_percentage:.3}%"
+    result["attack"] = f"{attack_percentage:.2f}%"
+    result["defense"] = f"{defense_percentage:.2f}%"
     result["sla"] = "100%"
     if (checker_valid + checker_faulty) != 0:
         sla_percentage = checker_valid / (checker_valid + checker_faulty)
-        result["sla"] = f"{sla_percentage:.3}%"
+        result["sla"] = f"{sla_percentage:.2f}%"
     return result
 
 def get_leaderboard(freeze_time: datetime.datetime | None = None, is_admin: bool = False) -> List:

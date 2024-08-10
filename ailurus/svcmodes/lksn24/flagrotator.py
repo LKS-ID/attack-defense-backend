@@ -33,7 +33,7 @@ def handler_flagrotator_task(body: FlagrotatorTaskSchema, **kwargs):
 
     try:
         ssh.connect(samba_ip, username="ubuntu", pkey=pkey, timeout=5)
-        ssh.exec_command("echo '{flag_value}' > {flag_path}".format(flag_value=flag_value, flag_path=flag_path))
+        ssh.exec_command("sudo -u samba-lksn bash -c 'echo \"{flag_value}\" > {flag_path}'".format(flag_value=flag_value, flag_path=flag_path))
         ssh.close()
         log.info(f"Successfully rotate flag for team_id: {team_id}, challenge_id={chall_id}.")
         return True
@@ -42,6 +42,9 @@ def handler_flagrotator_task(body: FlagrotatorTaskSchema, **kwargs):
         return None
     except paramiko.SSHException as e:
         log.error(f"Unable to establish SSH connection to {samba_ip}: {str(e)}")
+        return None
+    except TimeoutError as e:
+        log.error(f"Timeout when establish SSH connection to {samba_ip}: {str(e)}")
         return None
     except Exception as e:
         log.error(f"Some error occured: {str(e)}")

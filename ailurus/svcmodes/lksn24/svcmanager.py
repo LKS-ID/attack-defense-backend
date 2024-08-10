@@ -1,5 +1,5 @@
 from ailurus.models import db, Challenge, Service, Team, ProvisionMachine
-from ailurus.utils.config import get_app_config
+from ailurus.utils.config import get_app_config, is_contest_running
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from typing import List, Dict
@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 def generator_public_services_info(team: Team, challenge: Challenge, services: List[Service]) -> Dict | List | str:
     # All challenge will point to the same service
     first_challenge: Challenge = Challenge.query.order_by(Challenge.id).first()
-    chall_id = first_challenge.challenge_id 
+    chall_id = first_challenge.id 
     service: Service = Service.query.filter_by(challenge_id=chall_id, team_id=team.id).first()
     
     if not service:
@@ -81,13 +81,13 @@ def handler_svcmanager_request(**kwargs) -> flask.Response:
     team_id = kwargs.get('team_id')
     
     cmd = request.args.get("action")
-    if cmd not in ALLOWED_ACTION:
+    if cmd not in ALLOWED_ACTION or (not is_admin and not is_contest_running()):
         return flask.jsonify(status="failed", message="command not implemented."), 400
 
     # All challenge will point to the same service
     first_challenge: Challenge = Challenge.query.order_by(Challenge.id).first()
-    if chall_id != first_challenge.challenge_id:
-        chall_id = first_challenge.challenge_id    
+    if chall_id != first_challenge.id:
+        chall_id = first_challenge.id    
     
     if cmd == "get_credentials":
         service = Service.query.filter_by(challenge_id=chall_id, team_id=team_id).first()
@@ -104,6 +104,9 @@ def handler_svcmanager_request(**kwargs) -> flask.Response:
     rabbitmq_channel.queue_declare(queue_name, durable=True)
 
     artifact_path = os.path.join(get_app_config("DATA_DIR"), "challenges", f"artifact-{chall_id}.zip")
+    if not os.path.exists(artifact_path):
+        return flask.jsonify(status="failed", message="artifact not found."), 400
+
     with open(artifact_path, "rb") as fp:
         artifact_data = base64.b64encode(fp.read())
 
@@ -198,7 +201,7 @@ def generate_share_in_samba_server(provision_machine_detail, team_id, team_machi
         for chall in challenges:
             chall_slug = chall.slug
             share_name = f"flag-{chall_slug}-t{team_id}"
-            config_path = f"/etc/smb/smb.d/{share_name}.conf"
+            config_path = f"/home/ubuntu/samba/samba.d/{share_name}.conf"
             flag_dir = f"/home/samba-lksn/flags/{chall_slug}-t{team_id}"
 
             share_config = """[{share_name}]
@@ -209,10 +212,11 @@ def generate_share_in_samba_server(provision_machine_detail, team_id, team_machi
    smb encrypt = required
    hosts allow = {machine_ip}""".format(share_name=share_name, flag_dir=flag_dir, machine_ip=team_machine_ip)
             
-            ssh.exec_command("mkdir -p {flag_dir}".format(flag_dir=flag_dir))
-            ssh.exec_command("cat <<EOF > {config_path}\n{config_content}\nEOF".format(config_path=config_path, config_content=share_config))
+            ssh.exec_command("sudo -u samba-lksn mkdir -p {flag_dir}".format(flag_dir=flag_dir))
+            ssh.exec_command("echo \'{config_content}\' > {config_path}".format(config_path=config_path, config_content=share_config))
+            
+        ssh.exec_command("sudo /home/ubuntu/samba/recreate_share_config.sh && sudo systemctl restart smbd")
         
-        ssh.exec_command(f"sudo /etc/smb/recreate_share_config.sh")
         ssh.close()
         log.info(f"Successfully generate share in samba for team_id: {team_id}.")
         return ssh
@@ -221,6 +225,9 @@ def generate_share_in_samba_server(provision_machine_detail, team_id, team_machi
         return None
     except paramiko.SSHException as e:
         log.error(f"Unable to establish SSH connection to {samba_ip}: {str(e)}")
+        return None
+    except TimeoutError as e:
+        log.error(f"Timeout when establish SSH connection to {samba_ip}: {str(e)}")
         return None
     except Exception as e:
         log.error(f"Some error occured: {str(e)}")
@@ -266,10 +273,10 @@ def do_provision(body: ServiceManagerTaskSchema, **kwargs):
     chall_detail_entries = []
     for chall_slug, chall_detail_cfg in configs["challenges"].items():
         share_name = f"flag-{chall_slug}-t{body['team_id']}"
-        chall_entry = "\"{slug},{owner},{share_name},{flag_dir}\"".format(
-            chall_slug, chall_detail_cfg["owner"], share_name, chall_detail_cfg["flag_dir"])
-        if chall_detail_cfg["is_root_flag"]:
-            root_chall_detail = chall_entry.strip()
+        chall_entry = "\\\"{slug},{owner},{share_name},{flag_dir}\\\"".format(
+            slug=chall_slug, owner=chall_detail_cfg["owner"], share_name=share_name, flag_dir=chall_detail_cfg["flag_dir"])
+        if chall_detail_cfg.get("is_root_flag", False):
+            root_chall_detail = chall_entry
         else:
             chall_detail_entries.append(chall_entry)
     bash_chall_detail = "\\n".join(["("] + chall_detail_entries + [")"])
