@@ -1,5 +1,5 @@
 # Service Mode - LKSN24
-LKSN24 service mode utilize AWS CloudFormation. There are (number of challenges + 1) flags on each machine, consisting of a flag for each challenge and a root flag. 
+LKSN24 service mode utilize AWS CloudFormation to provision the resources. There are (number of challenges + 1) flags on each machine, consisting of a flag for each challenge and a root flag. 
 
 ## Flag Rotator
 Worker will overwrite the content of `/home/samba-lksn/flags/<challenge_slug>-t<team_id>/flag.txt` in Samba server via SSH.
