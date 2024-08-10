@@ -1,13 +1,24 @@
+challenges:
+  slug1:
+    owner: user_owner
+    flag_dir: /path/to/mount/flag/dir
+  slug2:
+    owner: user_owner
+    flag_dir: /path/to/mount/flag/dir
+
+templates:
+  infra: vpc-samba-resource.json
+  machine: team-resource.json
+
+local_user:
+  team: ubuntu
+  checker: ctf
+
+# AWS credentials    
 credentials:
   aws_access_key_id: access_key
   aws_secret_access_key: secret_access_key
   region_name: us-east-1
-templates:
-  infra: vpc-samba-resource.json
-  machine: team-resource.json
-local_user:
-  team: ubuntu
-  checker: ctf
 
 # Cloudformation Parameters
 parameters:

@@ -531,7 +531,7 @@
                     }
                 ],
                 "UserData": {
-                    "Fn::Base64": "#!/bin/bash\n\n# assume this script is ran from root\nSAMBA_USER=samba-lksn\n\n# install samba\napt update && apt install -y samba\n\n# create user\nuseradd -m -g root $SAMBA_USER\n\n# passwordless samba\n(echo -n ''; echo -n '') | smbpasswd -a $SAMBA_USER\nsmbpasswd -e samba-lksn $SAMBA_USER\n\n# restart smbd\nsystemctl restart smbd"
+                    "Fn::Base64": "#!/bin/bash\n\n# assume this script is ran from root\nSAMBA_USER=samba-lksn\n\n# install samba\napt update && apt install -y samba\n\n# create user\nuseradd -m -g root $SAMBA_USER\n\n# passwordless samba\n(echo -n ''; echo -n '') | smbpasswd -a $SAMBA_USER\nsmbpasswd -e samba-lksn $SAMBA_USER\n\n# prepare modular share configuration\nmkdir -p /etc/smb/smb.d/\necho \"include = /etc/smb/includes.conf\" >> /etc/samba/smb.conf\ntouch /etc/smb/includes.conf\n\ncat <<EOF > /etc/smb/recreate_share_config.sh\n#!/bin/bash\nls /etc/smb/smb.d/* | sed -e 's/^/include = /' > /etc/smb/includes.conf\nEOF\nchmod +x /etc/smb/recreate_share_config.sh\n\n\n# restart smbd\nsystemctl restart smbd"
                 }
             }
         }
@@ -554,6 +554,15 @@
                 ]
             },
             "Description": "Subnet ID created for all teams instances."
+        },
+        "SambaServerPrivateIp": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "SambaServerInstance",
+                    "PrivateIp"
+                ]
+            },
+            "Description": "Private IP address of the samba server"
         }
     }
 }

@@ -12,9 +12,11 @@ import boto3
 import datetime
 import flask
 import ipaddress
+import io
 import json
 import logging
 import os
+import paramiko
 import pika
 import secrets
 import yaml
@@ -181,7 +183,57 @@ def create_or_get_provision_machine(challenge_id, artifact_folder):
     return provision_machine
 
 
+def generate_share_in_samba_server(provision_machine_detail, team_id, team_machine_ip):
+    samba_ip = provision_machine_detail["SambaServerPrivateIp"]
+    samba_privkey = provision_machine_detail["SambaMachinePrivateKey"]
+    challenges: List[Challenge] = Challenge.query.all()
+
+    pkey = paramiko.Ed25519Key.from_private_key(io.StringIO(samba_privkey))
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    try:
+        ssh.connect(samba_ip, username="ubuntu", pkey=pkey, timeout=5)
+        
+        for chall in challenges:
+            chall_slug = chall.slug
+            share_name = f"flag-{chall_slug}-t{team_id}"
+            config_path = f"/etc/smb/smb.d/{share_name}.conf"
+            flag_dir = f"/home/samba-lksn/flags/{chall_slug}-t{team_id}"
+
+            share_config = """[{share_name}]
+   path = {flag_dir}
+   read only = yes
+   browsable = no
+   valid users = samba-lksn
+   smb encrypt = required
+   hosts allow = {machine_ip}""".format(share_name=share_name, flag_dir=flag_dir, machine_ip=team_machine_ip)
+            
+            ssh.exec_command("mkdir -p {flag_dir}".format(flag_dir=flag_dir))
+            ssh.exec_command("cat <<EOF > {config_path}\n{config_content}\nEOF".format(config_path=config_path, config_content=share_config))
+        
+        ssh.exec_command(f"sudo /etc/smb/recreate_share_config.sh")
+        ssh.close()
+        log.info(f"Successfully generate share in samba for team_id: {team_id}.")
+        return ssh
+    except paramiko.AuthenticationException:
+        log.error(f"Authentication failed for {samba_ip}")
+        return None
+    except paramiko.SSHException as e:
+        log.error(f"Unable to establish SSH connection to {samba_ip}: {str(e)}")
+        return None
+    except Exception as e:
+        log.error(f"Some error occured: {str(e)}")
+        return None
+
+
 def do_provision(body: ServiceManagerTaskSchema, **kwargs):
+    prev_service: Service = Service.query.filter_by(
+        team_id=body["team_id"],
+        challenge_id=body["challenge_id"]).first()
+    if prev_service:
+        return log.error("Cannot perform provision for team={} challenge={} because service exist".format(body["team_id"], body["challenge_id"]))
+
     artifact_folder = init_artifact(body, **kwargs)    
     provision_machine = create_or_get_provision_machine(body["challenge_id"], artifact_folder)
     if not provision_machine:
@@ -189,15 +241,17 @@ def do_provision(body: ServiceManagerTaskSchema, **kwargs):
 
     provision_machine_detail = json.loads(provision_machine.detail)
 
-    # TODO: Add new samba configuration
-
     with open(os.path.join(artifact_folder, "config.yml")) as fp:
         configs = yaml.safe_load(fp)
 
     machine_privkey, machine_pubkey = generate_ssh_key()
+    machine_ip = calculate_team_instanceip(configs["parameters"]["PrivateCidrBlock"], body["team_id"])
+    
+    generate_share_in_samba_server(provision_machine_detail, body["team_id"], machine_ip)
+    
     stack_params = {
         **configs["parameters"],
-        "MachinePrivateIpAddress": calculate_team_instanceip(configs["parameters"]["PrivateCidrBlock"], body["team_id"]),
+        "MachinePrivateIpAddress": machine_ip,
         "MachinePublicKey": machine_pubkey,
         "TeamId": str(body["team_id"]),
         "MachineSecurityGroupId": provision_machine_detail["MachineSecurityGroupId"],
@@ -207,8 +261,17 @@ def do_provision(body: ServiceManagerTaskSchema, **kwargs):
     with open(os.path.join(artifact_folder, configs["templates"]["machine"])) as fp:
         template_body = fp.read()
 
-        # TODO: Render team-resources.json template
-        template_body = template_body.replace("{{Ailurus.CheckerPublicKey}}", provision_machine_detail["CheckerPublicKey"])
+    # Render team-resources.json template
+    chall_detail_entries = []
+    for chall_slug, chall_detail_cfg in configs["challenges"].items():
+        share_name = f"flag-{chall_slug}-t{body['team_id']}"
+        chall_entry = "\"{slug},{owner},{share_name},{flag_dir}\"".format(
+            chall_slug, chall_detail_cfg["owner"], share_name, chall_detail_cfg["flag_dir"])
+        chall_detail_entries.append(chall_entry)
+    bash_chall_detail = "\\n".join(["("] + chall_detail_entries + [")"])
+    template_body = template_body.replace("{{Ailurus.Challenges}}", bash_chall_detail)
+    template_body = template_body.replace("{{Ailurus.CheckerPublicKey}}", provision_machine_detail["CheckerPublicKey"])
+    template_body = template_body.replace("{{Ailurus.SambaServerPrivateIp}}", provision_machine_detail["SambaServerPrivateIp"])
 
     stack_output = create_or_update_cloudformation_stack(configs['credentials'], stack_name, template_body, stack_params)
     if not stack_output:
