@@ -1,5 +1,11 @@
+from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
+from marshmallow import pre_load, post_dump
 from typing import TypedDict, Dict
+
 import datetime
+import json
+
+from .models import CheckerAgentReport
 
 class ServiceManagerTaskSchema(TypedDict):
     action: str
@@ -55,3 +61,21 @@ class CheckerResultDetailSchema(TypedDict):
     exception: str
     checker_output: Dict
     time_finished: datetime.datetime
+
+class CheckerAgentReportSchema(SQLAlchemyAutoSchema):
+    class Meta:
+        model = CheckerAgentReport
+    
+    @pre_load
+    def dumps_status(self, data, **kwargs):
+        for key in ["flag_status", "challenge_status"]:
+            if key in data and isinstance(data[key], (dict, list)):
+                data[key] = json.dumps(data[key])
+        return data
+    
+    @post_dump
+    def parse_status(self, data, **kwargs):
+        for key in ["flag_status", "challenge_status"]:
+            if key in data and isinstance(data[key], (dict, list)):
+                data[key] = json.loads(data[key])
+        return data

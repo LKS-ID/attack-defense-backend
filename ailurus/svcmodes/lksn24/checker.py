@@ -6,7 +6,8 @@ from multiprocessing.pool import ThreadPool
 from sqlalchemy import select
 from typing import List, Mapping, Any, Dict
 
-from .schema import CheckerTaskSchema, CheckerResultDetailSchema
+from .schema import CheckerTaskSchema, CheckerResultDetailSchema, CheckerAgentReportSchema
+from .models import CheckerAgentReport
 
 import datetime
 import importlib
@@ -78,13 +79,18 @@ def handler_checker_task(body: CheckerTaskSchema, **kwargs):
                 Flag.round == body["current_round"],
             )
         ).scalars().all()
-        
-        # TODO: inject checker agent report as argument
+
+        service_ip = ServiceSchema().dump(services[0])["detail"]["checker"]["ip"]
+        agent_latest_report: CheckerAgentReport = CheckerAgentReport.query.filter_by(
+                source_ip=service_ip
+            ).order_by(CheckerAgentReport.time_created.desc()).first()
+
         checker_status, checker_detail = execute_check_function_with_timelimit(
             checker_module.main,
             [
                 ServiceSchema().dump(services, many=True),
                 FlagSchema().dump(flags, many=True),
+                CheckerAgentReportSchema().dump(agent_latest_report),
             ],
             body.get("time_limit", 10)
         )
