@@ -5,7 +5,6 @@ Revises: f9e5ec72e965
 Create Date: 2024-08-11 18:22:53.445401
 
 """
-from alembic import op
 import sqlalchemy as sa
 
 
@@ -16,7 +15,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade(op):
     op.create_table('checker_agent_report',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('ip_source', sa.String(), nullable=False),
@@ -40,6 +39,6 @@ def upgrade():
     ])
 
 
-def downgrade():
+def downgrade(op):
     op.drop_table('checker_agent_report')
 
