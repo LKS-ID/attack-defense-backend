@@ -252,7 +252,7 @@ def do_provision(body: ServiceManagerTaskSchema, **kwargs):
         configs = yaml.safe_load(fp)
 
     machine_privkey, machine_pubkey = generate_ssh_key()
-    machine_ip = calculate_team_instanceip(configs["parameters"]["PrivateCidrBlock"], body["team_id"])
+    machine_ip = calculate_team_instanceip(configs["parameters"]["MachineSubnetCidrBlock"], body["team_id"])
     
     generate_share_in_samba_server(provision_machine_detail, body["team_id"], machine_ip)
     
