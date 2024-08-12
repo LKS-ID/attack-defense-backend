@@ -56,7 +56,7 @@ def calculate_team_chall_leaderboard_entry(team_id: int, chall_id: int, freeze_t
     result["defense"] = f"{defense_percentage:.2f}%"
     result["sla"] = "100%"
     if (checker_valid + checker_faulty) != 0:
-        sla_percentage = checker_valid / (checker_valid + checker_faulty)
+        sla_percentage = checker_valid / (checker_valid + checker_faulty) * 100
         result["sla"] = f"{sla_percentage:.2f}%"
     return result
 

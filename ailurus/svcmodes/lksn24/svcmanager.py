@@ -34,7 +34,7 @@ def generator_public_services_info(team: Team, challenge: Challenge, services: L
     if not service:
         return ""
     
-    service_detail: ServiceDetailSchema = json.loads(service)
+    service_detail: ServiceDetailSchema = json.loads(service.detail)
     return service_detail["publish"]["IP"]
 
 

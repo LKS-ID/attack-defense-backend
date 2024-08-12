@@ -8,7 +8,7 @@ challenges:
     is_root_flag: true
 
 templates:
-  infra: vpc-samba-resource.json
+  infra: machinesubnet-samba-resource.json
   machine: team-resource.json
 
 local_user:
