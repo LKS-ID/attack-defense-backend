@@ -1,7 +1,7 @@
 """Add CheckerAgentReport table
 
 Revision ID: 1c0af4ba48be
-Revises: f9e5ec72e965
+Revises: -
 Create Date: 2024-08-11 18:22:53.445401
 
 """

@@ -9,6 +9,7 @@ Worker will overwrite the content of `/home/samba-lksn/flags/<challenge_slug>-t<
 ## Checker
 There are several checker result messages:
 - `valid`: Everything is working fine.
+- `agent lost`: The checker agent did not send any new heartbeats.
 - `flag missing`: The service seems to be working, but flags cannot be retrieved.
 - `service faulty`: The service is reachable, but not working correctly.
 - `not reachable`: The service is not reachable.
